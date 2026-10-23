@@ -1,0 +1,63 @@
+"""Public integration constants; no installation-specific entities."""
+
+DOMAIN = "vallox_autopilot"
+VERSION = "0.1.0"
+PLATFORMS = ["sensor", "switch", "button", "number"]
+CARD_URL = "/vallox_autopilot/card.js"
+DEFAULTS = {
+    "home_speed": 30,
+    "away_speed": 10,
+    "boost_speed": 80,
+    "home_start": 56,
+    "home_full": 66,
+    "shower_start": 60,
+    "shower_full": 75,
+    "shower_delta_start": 8,
+    "shower_delta_full": 20,
+    "co2_start": 1000,
+    "co2_full": 1400,
+    "winter_below": 0,
+    "winter_rh_reduction": 5,
+    "ramp_up": 5,
+    "ramp_down": 2,
+    "release_minutes": 10,
+    "boost_minutes": 15,
+    "override_minutes": 30,
+    "stale_minutes": 30,
+}
+# key: (minimum, maximum, step, unit, label)
+NUMBERS = {
+    "home_speed": (10, 100, 1, "%", "Home speed"),
+    "away_speed": (10, 100, 1, "%", "Away speed"),
+    "boost_speed": (10, 100, 1, "%", "Boost speed"),
+    "home_start": (30, 80, 1, "%", "Home humidity start"),
+    "home_full": (35, 95, 1, "%", "Home humidity full boost"),
+    "shower_start": (30, 90, 1, "%", "Shower humidity start"),
+    "shower_full": (35, 99, 1, "%", "Shower humidity full boost"),
+    "shower_delta_start": (1, 30, 1, "%", "Shower excess start"),
+    "shower_delta_full": (2, 40, 1, "%", "Shower excess full boost"),
+    "co2_start": (500, 2000, 50, "ppm", "CO₂ boost start"),
+    "co2_full": (600, 3000, 50, "ppm", "CO₂ full boost"),
+    "winter_below": (-20, 15, 1, "°C", "Winter outdoor threshold"),
+    "winter_rh_reduction": (0, 15, 1, "%", "Winter humidity threshold reduction"),
+    "ramp_up": (1, 30, 1, "%/min", "Speed increase"),
+    "ramp_down": (1, 20, 1, "%/min", "Speed decrease"),
+    "release_minutes": (1, 60, 1, "min", "Boost release delay"),
+    "boost_minutes": (1, 120, 1, "min", "Manual boost duration"),
+    "override_minutes": (5, 240, 5, "min", "External adjustment hold"),
+    "stale_minutes": (5, 180, 5, "min", "Sensor freshness limit"),
+}
+BINDINGS = {
+    "fan_entity": ("fan", False, True),
+    "home_humidity_entities": ("sensor", True, True),
+    "shower_humidity_entity": ("sensor", False, True),
+    "co2_entity": ("sensor", False, True),
+    "home_entity": (["input_boolean", "binary_sensor", "switch"], False, True),
+    "sauna_entity": (["binary_sensor", "input_boolean", "switch"], False, True),
+    "outdoor_entity": ("sensor", False, True),
+    "supply_entity": ("sensor", False, False),
+    "extract_entity": ("sensor", False, False),
+    "actual_speed_entity": ("sensor", False, False),
+    "cell_entity": ("sensor", False, True),
+    "filter_entity": ("sensor", False, False),
+}
