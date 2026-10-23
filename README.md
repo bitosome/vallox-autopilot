@@ -9,7 +9,7 @@ A Home Assistant integration and bundled dashboard card for gradual, configurabl
 1. Install the native Vallox integration and confirm its fan, humidity, CO₂ and temperature entities work.
 2. Add `https://github.com/bitosome/vallox-autopilot` to HACS as an **Integration**, download and restart Home Assistant.
 3. Add **Vallox Autopilot** in Settings → Devices & services. Select the native fan, dry-house humidity sensors, shower humidity, CO₂ and heat-recovery/outdoor sensors. Leave the occupancy input empty to use the integration’s shared Home mode switch (`on` = Home, `off` = Away). For sauna detection, choose heater current sensors in amperes, or an existing external sauna binary sensor. Keep shower sensors out of the dry-house group.
-4. Add the **Vallox Autopilot** dashboard card and select its Status sensor. The module registers automatically; YAML dashboards can load `/vallox_autopilot/card.js?v=0.3.1` as a JavaScript module.
+4. Add the **Vallox Autopilot** dashboard card and select its Status sensor. The module registers automatically; YAML dashboards can load `/vallox_autopilot/card.js?v=0.3.2` as a JavaScript module.
 5. Review settings before turning Auto on. New controllers start **off**.
 
 ```yaml

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.2
+
+- Add a subtle theme-coloured fan and airflow animation to the main tile, paced by reported fan speed.
+- Keep unavailable/stopped fans still and honour reduced-motion preferences; preserve all controls and readings.
+
 ## 0.3.1
 
 - Stop boost immediately returns to current automatic demand instead of waiting through the normal cooldown and slow ramp-down.
