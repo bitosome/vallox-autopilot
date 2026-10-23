@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.2
+## 0.3.3
 
 - Add a subtle theme-coloured fan and airflow animation to the main tile, paced by reported fan speed.
 - Keep unavailable/stopped fans still and honour reduced-motion preferences; preserve all controls and readings.
