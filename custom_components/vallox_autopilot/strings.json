@@ -4,25 +4,26 @@
     "step": {
       "user": {
         "title": "Connect ventilation",
-        "description": "Use separate home and shower sensors. Home is on when occupied; sauna is on when heating. Native Vallox must already be configured.",
+        "description": "Leave external Home/Away empty to use the persistent Home mode switch (on = Home, off = Away). Choose either raw sauna current sensors in amperes or an external sauna entity. Do not select this integration’s own outputs.",
         "data": {
           "fan_entity": "Fan entity",
           "home_humidity_entities": "Home humidity entities",
           "shower_humidity_entity": "Shower humidity entity",
           "co2_entity": "Co2 entity",
-          "home_entity": "Home entity",
-          "sauna_entity": "Sauna entity",
+          "home_entity": "External Home/Away source (optional)",
+          "sauna_entity": "External sauna state (alternative)",
           "outdoor_entity": "Outdoor entity",
           "supply_entity": "Supply entity",
           "extract_entity": "Extract entity",
           "actual_speed_entity": "Actual speed entity",
           "cell_entity": "Cell entity",
-          "filter_entity": "Filter entity"
+          "filter_entity": "Filter entity",
+          "sauna_current_entities": "Sauna heater current sensors"
         }
       }
     },
     "error": {
-      "invalid_bindings": "Check the native fan, sensor group and separate shower sensor."
+      "invalid_bindings": "Check the native fan, separate humidity inputs and exactly one sauna source. Controller outputs cannot be used as inputs."
     },
     "abort": {
       "already_configured": "This fan already has a controller."
@@ -43,19 +44,21 @@
           "home_humidity_entities": "Home humidity entities",
           "shower_humidity_entity": "Shower humidity entity",
           "co2_entity": "Co2 entity",
-          "home_entity": "Home entity",
-          "sauna_entity": "Sauna entity",
+          "home_entity": "External Home/Away source (optional)",
+          "sauna_entity": "External sauna state (alternative)",
           "outdoor_entity": "Outdoor entity",
           "supply_entity": "Supply entity",
           "extract_entity": "Extract entity",
           "actual_speed_entity": "Actual speed entity",
           "cell_entity": "Cell entity",
-          "filter_entity": "Filter entity"
-        }
+          "filter_entity": "Filter entity",
+          "sauna_current_entities": "Sauna heater current sensors"
+        },
+        "description": "Leave external Home/Away empty to use the persistent Home mode switch (on = Home, off = Away). Choose either raw sauna current sensors in amperes or an external sauna entity. Do not select this integration’s own outputs."
       },
       "tuning": {
         "title": "Demand and timing",
-        "description": "Speed order: away \u2264 home \u2264 boost. Each full-boost threshold must exceed its start threshold.",
+        "description": "Speed order: away ≤ home ≤ boost. Each full-boost threshold must exceed its start threshold.",
         "data": {
           "home_speed": "Home speed",
           "away_speed": "Away speed",
@@ -66,8 +69,8 @@
           "shower_full": "Shower humidity full boost",
           "shower_delta_start": "Shower excess start",
           "shower_delta_full": "Shower excess full boost",
-          "co2_start": "CO\u2082 boost start",
-          "co2_full": "CO\u2082 full boost",
+          "co2_start": "CO₂ boost start",
+          "co2_full": "CO₂ full boost",
           "winter_below": "Winter outdoor threshold",
           "winter_rh_reduction": "Winter humidity threshold reduction",
           "ramp_up": "Speed increase",
@@ -75,13 +78,16 @@
           "release_minutes": "Boost release delay",
           "boost_minutes": "Manual boost duration",
           "override_minutes": "External adjustment hold",
-          "stale_minutes": "Sensor freshness limit"
+          "stale_minutes": "Sensor freshness limit",
+          "sauna_current_threshold": "Sauna current threshold",
+          "sauna_on_seconds": "Sauna activation delay",
+          "sauna_off_minutes": "Sauna release delay"
         }
       }
     },
     "error": {
       "invalid_settings": "Check speed order and start/full threshold pairs.",
-      "invalid_bindings": "Check entity bindings; create a new controller to change the fan."
+      "invalid_bindings": "Check the native fan, separate humidity inputs and exactly one sauna source. Controller outputs cannot be used as inputs."
     }
   }
 }

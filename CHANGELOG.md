@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0
+
+- Added persistent shared Home mode switch for scene control without a legacy helper.
+- Added Sauna active sensor derived directly from heater current sensors, with configurable activation and cooldown delays and conservative restart recovery.
+- Optional external occupancy/sauna inputs remain supported; self-referential mappings are rejected.
+- Card exposes Home/Away control, sauna state and detector settings.
+
 ## 0.1.0
 
 - Configurable native-Vallox demand controller with separate house/shower humidity, relative shower excess, CO₂ and occupancy baselines.

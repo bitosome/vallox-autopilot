@@ -3,7 +3,7 @@
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
-from homeassistant.helpers import selector
+from homeassistant.helpers import selector, entity_registry as er
 from .const import DOMAIN, DEFAULTS, NUMBERS, BINDINGS
 from .engine import validate
 
@@ -21,6 +21,19 @@ def bindings_schema(values):
 
 
 def validate_bindings(hass, data):
+    if bool(data.get("sauna_entity")) == bool(data.get("sauna_current_entities")):
+        raise ValueError(
+            "Choose either sauna current sensors or an external sauna entity"
+        )
+    registry = er.async_get(hass)
+    for key in ("home_entity", "sauna_entity", "sauna_current_entities"):
+        values = data.get(key, [])
+        for entity_id in (
+            values if isinstance(values, list) else [values] if values else []
+        ):
+            entity = registry.async_get(entity_id)
+            if entity and entity.platform == DOMAIN:
+                raise ValueError("Cannot use the controller's own output as an input")
     if not data.get("home_humidity_entities"):
         raise ValueError("Choose at least one home humidity sensor")
     if data["shower_humidity_entity"] in data["home_humidity_entities"]:
@@ -75,7 +88,12 @@ class Options(config_entries.OptionsFlow):
                     for k, v in self.config_entry.options.items()
                     if k not in BINDINGS
                 }
-                merged.update({k: user_input.get(k, "") for k in BINDINGS})
+                merged.update(
+                    {
+                        k: user_input.get(k, [] if spec[1] else "")
+                        for k, spec in BINDINGS.items()
+                    }
+                )
                 return self.async_create_entry(title="", data=merged)
             except ValueError:
                 errors["base"] = "invalid_bindings"

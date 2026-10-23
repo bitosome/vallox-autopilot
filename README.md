@@ -8,8 +8,8 @@ A Home Assistant integration and bundled dashboard card for gradual, configurabl
 
 1. Install the native Vallox integration and confirm its fan, humidity, CO₂ and temperature entities work.
 2. Add `https://github.com/bitosome/vallox-autopilot` to HACS as an **Integration**, download and restart Home Assistant.
-3. Add **Vallox Autopilot** in Settings → Devices & services. Select the native fan, dry-house humidity sensors, shower humidity, CO₂, occupancy, sauna and heat-recovery/outdoor sensors. `on` means home / sauna active. Keep shower sensors out of the dry-house group.
-4. Add the **Vallox Autopilot** dashboard card and select its Status sensor. The module registers automatically; YAML dashboards can load `/vallox_autopilot/card.js?v=0.1.0` as a JavaScript module.
+3. Add **Vallox Autopilot** in Settings → Devices & services. Select the native fan, dry-house humidity sensors, shower humidity, CO₂ and heat-recovery/outdoor sensors. Leave the occupancy input empty to use the integration’s shared Home mode switch (`on` = Home, `off` = Away). For sauna detection, choose heater current sensors in amperes, or an existing external sauna binary sensor. Keep shower sensors out of the dry-house group.
+4. Add the **Vallox Autopilot** dashboard card and select its Status sensor. The module registers automatically; YAML dashboards can load `/vallox_autopilot/card.js?v=0.2.0` as a JavaScript module.
 5. Review settings before turning Auto on. New controllers start **off**.
 
 ```yaml
@@ -34,9 +34,13 @@ The defaults are starting values, **not commissioned airflow rates**. Set the mi
 
 ## Entities and settings
 
-One device contains Status, dry-house/shower humidity, CO₂, target speed, Automation switch, Boost / Cancel boost / Resume buttons, and number entities for all thresholds/timers/speeds. All users see the same settings. Native entity services allow automations, Companion/Watch and physical-switch integrations without wrapper scripts.
+One device contains Status, dry-house/shower humidity, CO₂, target speed, Automation and Home mode switches, Sauna active binary sensor, Boost / Cancel boost / Resume buttons, and number entities for all thresholds/timers/speeds. All users see the same settings. Native entity services allow automations, Companion/Watch and physical-switch integrations without wrapper scripts.
 
 Configure entity mappings in the integration options. Use the card's Settings tab or number entities for individual values; use the options Tuning form to change interdependent thresholds together. Validation enforces `away ≤ home ≤ boost` and `start < full`. The card resolves entity IDs from the integration, so renaming entities is supported.
+
+Home mode is shared and persisted across restarts and updates. When using an external occupancy entity, the internal Home mode switch is unavailable. Scenes can control the Home mode switch directly; no helper is needed.
+
+Sauna detection uses the highest configured heater-current reading: above 1 A for 5 seconds activates it; all currents below the threshold for 15 minutes release it. These values are configurable. Missing current data makes Sauna active unavailable and inhibits controller humidity boosts. An active sauna survives restart with a fresh cooldown, so thermostat pauses do not prematurely enable humidity boosts.
 
 History in Details records the latest 40 control decisions and interruptions. HA Recorder supplies longer native sensor/entity history. RAG labels reflect configured operating thresholds, including low-humidity warnings; they do not certify indoor air safety.
 

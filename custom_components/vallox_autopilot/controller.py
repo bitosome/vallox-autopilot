@@ -10,12 +10,14 @@ import time
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.event import (
+    async_call_later,
     async_track_state_change_event,
     async_track_time_interval,
 )
 from homeassistant.helpers.storage import Store
 from .const import DOMAIN, DEFAULTS, BINDINGS
 from .engine import demand, ramp, validate
+from .sauna import SaunaDetector
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,6 +32,8 @@ class Controller:
         self.store = Store(hass, 1, f"{DOMAIN}.{entry.entry_id}")
         self.saved = {
             "enabled": False,
+            "home_mode": True,
+            "sauna_active": None,
             "boost_until": 0,
             "hold_until": 0,
             "last_command": None,
@@ -46,6 +50,9 @@ class Controller:
         self.last_write = 0
         self.lower_since = 0
         self.pending = None
+        self.sauna = SaunaDetector()
+        self.sauna_timer = None
+        self.sauna_deadline = None
 
     async def setup(self):
         data = await self.store.async_load()
@@ -68,14 +75,28 @@ class Controller:
                     raise ValueError("Invalid saved speed")
             if not isinstance(data.get("events", []), list):
                 raise ValueError("Invalid saved history")
+            if "home_mode" in data and not isinstance(data["home_mode"], bool):
+                raise ValueError("Invalid saved Home/Away mode")
+            if data.get("sauna_active") is not None and not isinstance(
+                data["sauna_active"], bool
+            ):
+                raise ValueError("Invalid saved sauna state")
             self.saved.update(data)
+        if not data or "home_mode" not in data:
+            occupied = self.boolean("home_entity")
+            if occupied is not None:
+                self.saved["home_mode"] = occupied
+        if not data or "sauna_active" not in data:
+            self.saved["sauna_active"] = self.boolean("sauna_entity")
+        self.sauna = SaunaDetector(self.saved["sauna_active"])
+        await self.persist()
         self.unsubs.append(
             async_track_time_interval(self.hass, self.tick, timedelta(seconds=30))
         )
         self.bind()
         await self.tick()
 
-    def bind(self):
+    def bind(self, reset_sauna=False):
         if getattr(self, "unbind", None):
             self.unbind()
         entities = []
@@ -84,6 +105,12 @@ class Controller:
             entities.extend(
                 value if isinstance(value, list) else [value] if value else []
             )
+        if reset_sauna:
+            if self.sauna_timer:
+                self.sauna_timer()
+                self.sauna_timer = None
+            self.sauna_deadline = None
+            self.sauna = SaunaDetector(self.saved["sauna_active"])
         self.unbind = async_track_state_change_event(self.hass, entities, self.changed)
 
     @callback
@@ -151,9 +178,21 @@ class Controller:
 
     async def options_changed(self, hass, entry):
         async with self.lock:
+            previous = self.config
             self.config = {**DEFAULTS, **entry.data, **entry.options}
             validate(self.config)
-            self.bind()
+            self.bind(
+                reset_sauna=any(
+                    previous.get(k) != self.config.get(k)
+                    for k in (
+                        "sauna_current_entities",
+                        "sauna_entity",
+                        "sauna_current_threshold",
+                        "sauna_on_seconds",
+                        "sauna_off_minutes",
+                    )
+                )
+            )
         await self.tick()
 
     async def commit_action(self, previous):
@@ -162,6 +201,55 @@ class Controller:
         except Exception:
             self.saved = previous
             raise
+
+    async def home_mode(self, value):
+        if self.config.get("home_entity"):
+            raise ServiceValidationError(
+                "Home/Away is controlled by the configured external entity"
+            )
+        async with self.lock:
+            previous = deepcopy(self.saved)
+            self.saved["home_mode"] = bool(value)
+            self.record("Home mode selected" if value else "Away mode selected")
+            await self.commit_action(previous)
+        await self.tick()
+
+    async def sauna_state(self, now):
+        currents = self.config.get("sauna_current_entities")
+        if not currents:
+            return self.boolean("sauna_entity")
+        values = [self.value(e, 0, 1000, "A") for e in currents]
+        previous_detector = deepcopy(self.sauna)
+        state, deadline = self.sauna.observe(
+            values,
+            self.config["sauna_current_threshold"],
+            now,
+            self.config["sauna_on_seconds"],
+            self.config["sauna_off_minutes"] * 60,
+        )
+        if self.sauna.current != self.saved["sauna_active"]:
+            previous = deepcopy(self.saved)
+            self.saved["sauna_active"] = self.sauna.current
+            self.record(
+                "Sauna active; controller humidity boost inhibited"
+                if state
+                else "Sauna cooldown finished; humidity control restored"
+            )
+            try:
+                await self.commit_action(previous)
+            except Exception:
+                self.sauna = previous_detector
+                raise
+        if deadline != self.sauna_deadline:
+            if self.sauna_timer:
+                self.sauna_timer()
+                self.sauna_timer = None
+            self.sauna_deadline = deadline
+            if deadline is not None:
+                self.sauna_timer = async_call_later(
+                    self.hass, max(0, deadline - now), self.tick
+                )
+        return state
 
     async def enabled(self, value):
         async with self.lock:
@@ -244,8 +332,12 @@ class Controller:
             shower = self.value(c["shower_humidity_entity"], 0, 100, "%")
             co2 = self.value(c["co2_entity"], 250, 10000, "ppm")
             outdoor = self.value(c["outdoor_entity"], -60, 60, "°C")
-            sauna = self.boolean("sauna_entity")
-            occupied = self.boolean("home_entity")
+            sauna = await self.sauna_state(now)
+            occupied = (
+                self.boolean("home_entity")
+                if c.get("home_entity")
+                else self.saved["home_mode"]
+            )
             degraded = len(valid) != len(vals) or any(
                 v is None for v in [shower, co2, outdoor, sauna, occupied]
             )
@@ -282,6 +374,13 @@ class Controller:
                 "reason": result.reason,
                 "winter": result.winter,
                 "sauna_inhibited": sauna is not False,
+                "sauna_active": sauna,
+                "occupancy_source": "external"
+                if c.get("home_entity")
+                else "integration",
+                "sauna_source": "current_sensors"
+                if c.get("sauna_current_entities")
+                else "external",
                 "home": occupied,
                 "supply_temperature": self.value(c.get("supply_entity"), -30, 60, "°C"),
                 "outdoor_temperature": outdoor,
@@ -419,6 +518,9 @@ class Controller:
 
     async def close(self, persist=True):
         self.closed = True
+        if self.sauna_timer:
+            self.sauna_timer()
+            self.sauna_timer = None
         for fn in self.unsubs:
             fn()
         if getattr(self, "unbind", None):

@@ -1,10 +1,13 @@
 """Public integration constants; no installation-specific entities."""
 
 DOMAIN = "vallox_autopilot"
-VERSION = "0.1.0"
-PLATFORMS = ["sensor", "switch", "button", "number"]
+VERSION = "0.2.0"
+PLATFORMS = ["sensor", "switch", "button", "number", "binary_sensor"]
 CARD_URL = "/vallox_autopilot/card.js"
 DEFAULTS = {
+    "sauna_current_threshold": 1.0,
+    "sauna_on_seconds": 5,
+    "sauna_off_minutes": 15,
     "home_speed": 30,
     "away_speed": 10,
     "boost_speed": 80,
@@ -27,6 +30,9 @@ DEFAULTS = {
 }
 # key: (minimum, maximum, step, unit, label)
 NUMBERS = {
+    "sauna_current_threshold": (0.1, 30, 0.1, "A", "Sauna current threshold"),
+    "sauna_on_seconds": (1, 120, 1, "s", "Sauna activation delay"),
+    "sauna_off_minutes": (1, 120, 1, "min", "Sauna release delay"),
     "home_speed": (10, 100, 1, "%", "Home speed"),
     "away_speed": (10, 100, 1, "%", "Away speed"),
     "boost_speed": (10, 100, 1, "%", "Boost speed"),
@@ -52,8 +58,9 @@ BINDINGS = {
     "home_humidity_entities": ("sensor", True, True),
     "shower_humidity_entity": ("sensor", False, True),
     "co2_entity": ("sensor", False, True),
-    "home_entity": (["input_boolean", "binary_sensor", "switch"], False, True),
-    "sauna_entity": (["binary_sensor", "input_boolean", "switch"], False, True),
+    "home_entity": (["input_boolean", "binary_sensor", "switch"], False, False),
+    "sauna_entity": (["binary_sensor", "input_boolean", "switch"], False, False),
+    "sauna_current_entities": ("sensor", True, False),
     "outdoor_entity": ("sensor", False, True),
     "supply_entity": ("sensor", False, False),
     "extract_entity": ("sensor", False, False),
