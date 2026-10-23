@@ -1,0 +1,28 @@
+set_response_curve:
+  name: Set response curve
+  description: Save a shared piecewise-linear fan response. Points use x for input and y for requested fan percentage. Supply the current curve revision to prevent overwriting another user's edit.
+  target:
+    entity:
+      integration: vallox_autopilot
+      domain: sensor
+  fields:
+    curve:
+      required: true
+      selector:
+        select:
+          options: [home, shower, excess, co2]
+    profile:
+      required: true
+      selector:
+        select:
+          options: [home, away]
+    points:
+      required: true
+      selector:
+        object:
+    expected_revision:
+      required: true
+      selector:
+        number:
+          min: 0
+          mode: box

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0
+
+- Replace threshold sliders with directly draggable multi-point response curves, with point addition/removal, touch/keyboard controls and precise numeric editing.
+- Independently edit Home/Away occupancy responses for humidity, shower rise and CO₂.
+- Apply validated piecewise interpolation in the controller; retain existing demand unchanged until edited.
+- Persist shared curves with revision checks, save-failure feedback and conflict recovery. Keep native protections, sauna inhibition, global bounds and ramp/cooldown.
+
+
 ## 0.3.3
 
 - Add a subtle theme-coloured fan and airflow animation to the main tile, paced by reported fan speed.

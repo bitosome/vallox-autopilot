@@ -1,3 +1,5 @@
+import voluptuous as vol
+from homeassistant.helpers import entity_platform
 from homeassistant.components.sensor import (
     SensorEntity,
     SensorDeviceClass,
@@ -9,6 +11,18 @@ from .const import DOMAIN
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
+    entity_platform.async_get_current_platform().async_register_entity_service(
+        "set_response_curve",
+        {
+            vol.Required("curve"): vol.In(["home", "shower", "excess", "co2"]),
+            vol.Required("profile"): vol.In(["home", "away"]),
+            vol.Required("points"): list,
+            vol.Required("expected_revision"): vol.All(
+                vol.Coerce(int), vol.Range(min=0)
+            ),
+        },
+        "async_set_response_curve",
+    )
     async_add_entities(
         [Status(entry)]
         + [
@@ -26,6 +40,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class Status(ControllerEntity, SensorEntity):
     def __init__(self, entry):
         super().__init__(entry, "status", "Status", "mdi:air-filter")
+
+    async def async_set_response_curve(self, curve, profile, points, expected_revision):
+        await self.manager.set_response_curve(curve, profile, points, expected_revision)
 
     @property
     def native_value(self):

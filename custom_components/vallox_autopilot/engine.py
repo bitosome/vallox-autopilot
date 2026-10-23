@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from math import isfinite
 from .const import DEFAULTS, NUMBERS
+from .curves import effective_curves, interpolate, validate_saved
 
 
 def validate(config):
@@ -56,7 +57,16 @@ class Demand:
 
 
 def demand(
-    config, home, shower, co2, occupied, sauna, outdoor, boost=False, degraded=False
+    config,
+    home,
+    shower,
+    co2,
+    occupied,
+    sauna,
+    outdoor,
+    boost=False,
+    degraded=False,
+    curves=None,
 ):
     c = {**DEFAULTS, **config}
     validate(c)
@@ -68,22 +78,30 @@ def demand(
     candidates = {"Home" if occupied is not False else "Away": base}
     if degraded:
         candidates["Sensor fallback"] = c["home_speed"]
-    if sauna is False:
-        candidates["Home humidity"] = base + (c["boost_speed"] - base) * fraction(
-            home, hs, hf
-        )
-        shower_demand = max(
-            fraction(shower, ss, sf),
-            fraction(
-                shower - home if shower is not None and home is not None else None,
-                c["shower_delta_start"],
-                c["shower_delta_full"],
+    validate_saved(curves or {}, {})
+    responses = effective_curves(c, curves or {})
+    profile = "home" if occupied is not False or degraded else "away"
+
+    def response(key, reading, shift=0):
+        if reading is None:
+            return base
+        return max(
+            base,
+            min(
+                c["boost_speed"], interpolate(responses[key][profile], reading + shift)
             ),
         )
-        candidates["Shower humidity"] = base + (c["boost_speed"] - base) * shower_demand
-    candidates["CO₂"] = base + (c["boost_speed"] - base) * fraction(
-        co2, c["co2_start"], c["co2_full"]
-    )
+
+    if sauna is False:
+        candidates["Home humidity"] = response("home", home, reduction)
+        candidates["Shower humidity"] = max(
+            response("shower", shower, reduction),
+            response(
+                "excess",
+                shower - home if shower is not None and home is not None else None,
+            ),
+        )
+    candidates["CO₂"] = response("co2", co2)
     if boost:
         candidates["Manual boost"] = c["boost_speed"]
     reason = max(candidates, key=candidates.get)

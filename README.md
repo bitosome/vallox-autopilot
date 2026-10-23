@@ -9,7 +9,7 @@ A Home Assistant integration and bundled dashboard card for gradual, configurabl
 1. Install the native Vallox integration and confirm its fan, humidity, CO₂ and temperature entities work.
 2. Add `https://github.com/bitosome/vallox-autopilot` to HACS as an **Integration**, download and restart Home Assistant.
 3. Add **Vallox Autopilot** in Settings → Devices & services. Select the native fan, dry-house humidity sensors, shower humidity, CO₂ and heat-recovery/outdoor sensors. Leave the occupancy input empty to use the integration’s shared Home mode switch (`on` = Home, `off` = Away). For sauna detection, choose heater current sensors in amperes, or an existing external sauna binary sensor. Keep shower sensors out of the dry-house group.
-4. Add the **Vallox Autopilot** dashboard card and select its Status sensor. The module registers automatically; YAML dashboards can load `/vallox_autopilot/card.js?v=0.3.3` as a JavaScript module.
+4. Add the **Vallox Autopilot** dashboard card and select its Status sensor. The module registers automatically; YAML dashboards can load `/vallox_autopilot/card.js?v=0.4.0` as a JavaScript module.
 5. Review settings before turning Auto on. New controllers start **off**.
 
 ```yaml
@@ -36,7 +36,13 @@ The defaults are starting values, **not commissioned airflow rates**. Set the mi
 
 One device contains Status, dry-house/shower humidity, CO₂, target speed, Automation and Home mode switches, Sauna active binary sensor, Boost / Cancel boost / Resume buttons, and number entities for all thresholds/timers/speeds. All users see the same settings. Native entity services allow automations, Companion/Watch and physical-switch integrations without wrapper scripts.
 
-The Settings tab includes editable response curves for house humidity, shower humidity, shower rise above the house average and CO₂. Solid Home and dashed Away lines show requested speed from baseline to maximum; drag the threshold sliders or type values to edit the shared settings. Winter shifts are shown on the graph. The highest demand wins, then ramp/cooldown rules apply; actual fan speed can still differ under native control.
+The Settings tab includes a direct point editor for house humidity, shower humidity, shower rise above the house average and CO₂. Choose the Home or Away occupancy curve, drag a point in both directions, or use arrow keys / the selected point’s numeric fields. Add point inserts a point on the existing line; Remove point removes the selection. Each curve supports 2–12 ordered points. Speed cannot decrease as humidity/CO₂ increases, and global baseline/maximum speeds remain authoritative. The graph zooms around the points for touch editing; numeric fields can move a point anywhere within its allowed input range.
+
+Edits save automatically on release/commit through `vallox_autopilot.set_response_curve`, targeting the card’s Status entity. The backend stores curves and per-curve revisions in its HA Store, shared by all users and retained across updates/restarts. A stale concurrent edit is rejected; the card retains the draft and offers Reload shared curve or Retry. There is no browser-only authoritative setting and no service call on every drag movement. Cancelling a pointer gesture discards it.
+
+Without a custom curve, existing start/full thresholds generate exactly the previous two-point response; upgrading does not change demand. Those legacy threshold entities still define RAG badge warning levels and default curves. Once a curve is customized, its saved points define fan demand independently of those thresholds. Home/Away here means occupancy, not switching the native Vallox profile. Winter advances house/shower response by the configured RH reduction; the editor displays normal coordinates and explains the shift. The highest demand wins, then ramp/cooldown rules apply; actual fan speed can still differ under native control.
+
+For automations, `set_response_curve` takes `curve` (`home`, `shower`, `excess`, `co2`), `profile` (`home` or `away`), `points` (objects with input `x` and requested fan-percent `y`), and `expected_revision` from Status attribute `curve_revisions["curve:profile"]` (zero if missing). Status publishes the effective `response_curves`, including global speed bounds. Entity-service permissions apply.
 
 Configure entity mappings in the integration options. Use the card's Settings tab or number entities for individual values; use the options Tuning form to change interdependent thresholds together. Validation enforces `away ≤ home ≤ boost` and `start < full`. The card resolves entity IDs from the integration, so renaming entities is supported.
 

@@ -19,6 +19,7 @@ from homeassistant.helpers import entity_registry as er
 from .const import DOMAIN, DEFAULTS, BINDINGS
 from .engine import demand, ramp, validate
 from .sauna import SaunaDetector
+from .curves import validate_points, validate_saved, effective_curves
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -41,6 +42,8 @@ class Controller:
             "boost_return": None,
             "boost_cancel_pending": False,
             "events": [],
+            "response_curves": {},
+            "curve_revisions": {},
         }
         self.lock = asyncio.Lock()
         self.listeners = []
@@ -85,6 +88,9 @@ class Controller:
                 raise ValueError("Invalid saved sauna state")
             if not isinstance(data.get("boost_cancel_pending", False), bool):
                 raise ValueError("Invalid pending boost cancellation")
+            validate_saved(
+                data.get("response_curves", {}), data.get("curve_revisions", {})
+            )
             self.saved.update(data)
         if not data or "home_mode" not in data:
             occupied = self.boolean("home_entity")
@@ -138,6 +144,10 @@ class Controller:
             else None,
             events=list(self.saved["events"]),
             error=self.error,
+            response_curves=effective_curves(
+                self.config, self.saved["response_curves"]
+            ),
+            curve_revisions=deepcopy(self.saved["curve_revisions"]),
         )
         for fn in list(self.listeners):
             fn()
@@ -236,6 +246,29 @@ class Controller:
 
     async def persist(self):
         await self.store.async_save(self.saved)
+
+    async def set_response_curve(self, curve, profile, points, expected_revision):
+        try:
+            validate_points(curve, profile, points)
+        except ValueError as err:
+            raise ServiceValidationError(str(err)) from err
+        async with self.lock:
+            key = f"{curve}:{profile}"
+            if type(expected_revision) is not int or expected_revision != self.saved[
+                "curve_revisions"
+            ].get(key, 0):
+                raise ServiceValidationError(
+                    "This curve changed elsewhere. Reload the curve before saving again."
+                )
+            previous = deepcopy(self.saved)
+            self.saved["response_curves"].setdefault(curve, {})[profile] = deepcopy(
+                points
+            )
+            self.saved["curve_revisions"][key] = expected_revision + 1
+            self.record(f"{profile.title()} {curve} response curve updated")
+            await self.commit_action(previous)
+            self.publish()
+        await self.tick()
 
     async def option(self, key, value):
         async with self.lock:
@@ -422,7 +455,16 @@ class Controller:
             )
             boost = now < self.saved["boost_until"]
             result = demand(
-                c, home, shower, co2, occupied, sauna, outdoor, boost, degraded
+                c,
+                home,
+                shower,
+                co2,
+                occupied,
+                sauna,
+                outdoor,
+                boost,
+                degraded,
+                self.saved["response_curves"],
             )
             fan = self.hass.states.get(c["fan_entity"])
             current = fan.attributes.get("percentage") if fan else None
