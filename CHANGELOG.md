@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Fix clearing optional entity bindings in the native options form: suggested values no longer reinsert removed legacy sources.
+
 ## 0.2.0
 
 - Added persistent shared Home mode switch for scene control without a legacy helper.

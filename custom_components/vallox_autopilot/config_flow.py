@@ -12,7 +12,13 @@ def bindings_schema(values):
     schema = {}
     for key, (domain, multiple, required) in BINDINGS.items():
         marker = vol.Required if required else vol.Optional
-        kwargs = {"default": values[key]} if values.get(key) else {}
+        kwargs = (
+            {"default": values[key]}
+            if required and values.get(key)
+            else {"description": {"suggested_value": values[key]}}
+            if values.get(key)
+            else {}
+        )
         selection = {"domain": domain, "multiple": multiple}
         if key == "fan_entity":
             selection["integration"] = "vallox"

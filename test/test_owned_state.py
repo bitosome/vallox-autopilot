@@ -4,7 +4,10 @@ from unittest.mock import AsyncMock, patch
 from homeassistant.exceptions import ServiceValidationError
 from custom_components.vallox_autopilot.controller import Controller
 from custom_components.vallox_autopilot.sauna import SaunaDetector
-from custom_components.vallox_autopilot.config_flow import validate_bindings
+from custom_components.vallox_autopilot.config_flow import (
+    validate_bindings,
+    bindings_schema,
+)
 import test_controller as support
 
 BINDINGS = support.BINDINGS
@@ -138,6 +141,19 @@ class OwnedState(unittest.IsolatedAsyncioTestCase):
         self.entry.options = {"home_speed": 31}
         await self.m.options_changed(self.hass, self.entry)
         self.assertEqual(self.m.sauna_deadline, deadline)
+
+    async def test_optional_bindings_can_be_cleared_without_defaults_returning(self):
+        schema = bindings_schema(BINDINGS)
+        submitted = {
+            k: v
+            for k, v in BINDINGS.items()
+            if k not in ["home_entity", "sauna_entity"]
+        }
+        submitted["sauna_current_entities"] = ["sensor.current"]
+        result = schema(submitted)
+        self.assertNotIn("home_entity", result)
+        self.assertNotIn("sauna_entity", result)
+        validate_bindings(self.hass, result)
 
     async def test_requires_exactly_one_sauna_source(self):
         validate_bindings(self.hass, BINDINGS)
