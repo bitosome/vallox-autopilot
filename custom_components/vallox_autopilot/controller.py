@@ -15,6 +15,7 @@ from homeassistant.helpers.event import (
     async_track_time_interval,
 )
 from homeassistant.helpers.storage import Store
+from homeassistant.helpers import entity_registry as er
 from .const import DOMAIN, DEFAULTS, BINDINGS
 from .engine import demand, ramp, validate
 from .sauna import SaunaDetector
@@ -138,20 +139,83 @@ class Controller:
         for fn in list(self.listeners):
             fn()
 
-    def value(self, entity, low, high, unit=None):
+    def live_push_source(self, entity):
+        """ESPHome may suppress identical values; its connected API supplies liveness.
+
+        Do not exempt disconnected/deep-sleep devices or arbitrary retained states.
+        Unknown future runtime shapes fall back to timestamp freshness.
+        """
+        registered = er.async_get(self.hass).async_get(entity)
+        if not registered or registered.platform != "esphome" or registered.disabled_by:
+            return False
+        entry = self.hass.config_entries.async_get_entry(registered.config_entry_id)
+        return bool(
+            entry
+            and entry.domain == "esphome"
+            and getattr(getattr(entry, "runtime_data", None), "available", False)
+            is True
+        )
+
+    def reading_problem(self, entity, low, high, unit=None):
         s = self.hass.states.get(entity) if entity else None
-        if s is None or s.state in ["unknown", "unavailable"]:
-            return None
+        if s is None:
+            return "Missing entity"
+        if s.state in ["unknown", "unavailable"]:
+            return "Unavailable" if s.state == "unavailable" else "No reading"
         if unit and s.attributes.get("unit_of_measurement") != unit:
-            return None
+            return f"Expected {unit}"
         reported = getattr(s, "last_reported", s.last_updated).timestamp()
-        if time.time() - reported > self.config["stale_minutes"] * 60:
-            return None
+        if time.time() - reported > self.config[
+            "stale_minutes"
+        ] * 60 and not self.live_push_source(entity):
+            return f"No fresh reading for {int((time.time() - reported) / 60)} min"
         try:
             v = float(s.state)
         except (ValueError, TypeError):
+            return "Invalid reading"
+        return None if isfinite(v) and low <= v <= high else "Reading out of range"
+
+    def value(self, entity, low, high, unit=None):
+        if self.reading_problem(entity, low, high, unit):
             return None
-        return v if isfinite(v) and low <= v <= high else None
+        return float(self.hass.states.get(entity).state)
+
+    def input_issues(self):
+        c = self.config
+        specs = [(e, 0, 100, "%") for e in c["home_humidity_entities"]]
+        specs += [
+            (c["shower_humidity_entity"], 0, 100, "%"),
+            (c["co2_entity"], 250, 10000, "ppm"),
+            (c["outdoor_entity"], -60, 60, "°C"),
+        ]
+        specs += [(e, 0, 1000, "A") for e in c.get("sauna_current_entities", [])]
+        issues = []
+        for entity, low, high, unit in specs:
+            if reason := self.reading_problem(entity, low, high, unit):
+                state = self.hass.states.get(entity)
+                issues.append(
+                    {
+                        "entity_id": entity,
+                        "name": state.attributes.get("friendly_name", entity)
+                        if state
+                        else entity,
+                        "reason": reason,
+                    }
+                )
+        for key in ("home_entity", "sauna_entity"):
+            entity = c.get(key)
+            if entity and self.boolean(key) is None:
+                state = self.hass.states.get(entity)
+                issues.append(
+                    {
+                        "entity_id": entity,
+                        "name": state.attributes.get("friendly_name", entity)
+                        if state
+                        else entity,
+                        "reason": "Unavailable",
+                    }
+                )
+        return issues
 
     def boolean(self, key):
         s = self.hass.states.get(self.config.get(key, ""))
@@ -391,6 +455,7 @@ class Controller:
                 "cell_state": cell_state,
                 "degraded": degraded,
                 "missing_home_sensors": len(vals) - len(valid),
+                "input_issues": self.input_issues(),
                 "boost_until": self.saved["boost_until"] if boost else None,
                 "hold_until": self.saved["hold_until"]
                 if now < self.saved["hold_until"]

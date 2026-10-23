@@ -87,6 +87,8 @@ def demand(
     if boost:
         candidates["Manual boost"] = c["boost_speed"]
     reason = max(candidates, key=candidates.get)
+    if degraded and candidates[reason] <= c["home_speed"]:
+        reason = "Sensor fallback"
     if boost:
         reason = "Manual boost"
     return Demand(

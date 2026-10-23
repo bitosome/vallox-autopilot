@@ -75,6 +75,11 @@ class Runtime(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.hass = HomeAssistant(self.tmp.name)
+        from homeassistant.helpers import device_registry as dr, entity_registry as er
+
+        dr.async_setup(self.hass)
+        await dr.async_load(self.hass, load_empty=True)
+        await er.async_load(self.hass, load_empty=True)
         self.entry = SimpleNamespace(
             entry_id="test", data=BINDINGS.copy(), options={}, title="Ventilation"
         )

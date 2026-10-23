@@ -1,4 +1,5 @@
 import time
+from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, patch
 from homeassistant.exceptions import ServiceValidationError
@@ -44,14 +45,54 @@ class SaunaPolicy(unittest.TestCase):
 class OwnedState(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         await support.Runtime.asyncSetUp(self)
-        from homeassistant.helpers import entity_registry as er, device_registry as dr
-
-        dr.async_setup(self.hass)
-        await dr.async_load(self.hass, load_empty=True)
-        await er.async_load(self.hass, load_empty=True)
 
     asyncTearDown = support.Runtime.asyncTearDown
     fan = support.Runtime.fan
+
+    async def test_unchanged_connected_esphome_current_remains_valid(self):
+        from homeassistant.helpers import entity_registry as er
+
+        reg = er.async_get(self.hass)
+        entity = reg.async_get_or_create("sensor", "esphome", "stable_current")
+        self.hass.states.async_set(
+            entity.entity_id, "0.0088", {"unit_of_measurement": "A"}
+        )
+        source = SimpleNamespace(
+            domain="esphome", runtime_data=SimpleNamespace(available=True)
+        )
+        with (
+            patch.object(
+                self.hass,
+                "config_entries",
+                SimpleNamespace(async_get_entry=lambda _: source),
+            ),
+            patch(
+                "custom_components.vallox_autopilot.controller.time.time",
+                return_value=time.time() + 7200,
+            ),
+        ):
+            self.assertEqual(self.m.value(entity.entity_id, 0, 1000, "A"), 0.0088)
+            source.runtime_data.available = False
+            self.assertIsNone(self.m.value(entity.entity_id, 0, 1000, "A"))
+            source.runtime_data.available = True
+            self.hass.states.async_set(entity.entity_id, "unavailable")
+            self.assertIsNone(self.m.value(entity.entity_id, 0, 1000, "A"))
+
+    async def test_fallback_names_input_and_reason(self):
+        self.hass.states.async_set(
+            "sensor.shower", "unavailable", {"friendly_name": "Shower humidity"}
+        )
+        self.hass.states.async_set("input_boolean.home", "off")
+        await self.m.tick()
+        self.assertEqual(self.m.details["reason"], "Sensor fallback")
+        self.assertIn(
+            {
+                "entity_id": "sensor.shower",
+                "name": "Shower humidity",
+                "reason": "Unavailable",
+            },
+            self.m.details["input_issues"],
+        )
 
     async def test_home_mode_persists_and_chooses_away(self):
         self.m.config["home_entity"] = ""

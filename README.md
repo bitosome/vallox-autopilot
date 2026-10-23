@@ -9,7 +9,7 @@ A Home Assistant integration and bundled dashboard card for gradual, configurabl
 1. Install the native Vallox integration and confirm its fan, humidity, CO₂ and temperature entities work.
 2. Add `https://github.com/bitosome/vallox-autopilot` to HACS as an **Integration**, download and restart Home Assistant.
 3. Add **Vallox Autopilot** in Settings → Devices & services. Select the native fan, dry-house humidity sensors, shower humidity, CO₂ and heat-recovery/outdoor sensors. Leave the occupancy input empty to use the integration’s shared Home mode switch (`on` = Home, `off` = Away). For sauna detection, choose heater current sensors in amperes, or an existing external sauna binary sensor. Keep shower sensors out of the dry-house group.
-4. Add the **Vallox Autopilot** dashboard card and select its Status sensor. The module registers automatically; YAML dashboards can load `/vallox_autopilot/card.js?v=0.2.1` as a JavaScript module.
+4. Add the **Vallox Autopilot** dashboard card and select its Status sensor. The module registers automatically; YAML dashboards can load `/vallox_autopilot/card.js?v=0.3.0` as a JavaScript module.
 5. Review settings before turning Auto on. New controllers start **off**.
 
 ```yaml
@@ -30,11 +30,13 @@ name: Ventilation
 - Missing/stale sensor readings use at least the configured home baseline; known high CO₂/humidity demands may still increase speed. Missing sauna state inhibits controller humidity boost.
 - Shared settings, Auto state, timed-boost deadline, override hold and recent command history persist in Home Assistant. Back up HA configuration including `.storage`; ordinary restarts and integration updates preserve them.
 
-The defaults are starting values, **not commissioned airflow rates**. Set the minimums according to your unit's ventilation commissioning and house needs. Units supported: humidity `%`, CO₂ `ppm`, temperature `°C`. Sensors must report within the configurable freshness interval.
+The defaults are starting values, **not commissioned airflow rates**. Set the minimums according to your unit's ventilation commissioning and house needs. Units supported: humidity `%`, CO₂ `ppm`, temperature `°C`. Sensors must report within the configurable freshness interval. Available ESPHome entities on a connected API are allowed to retain unchanged readings; disconnected or sleeping devices do not get this exemption. The card names unusable inputs and their reasons.
 
 ## Entities and settings
 
 One device contains Status, dry-house/shower humidity, CO₂, target speed, Automation and Home mode switches, Sauna active binary sensor, Boost / Cancel boost / Resume buttons, and number entities for all thresholds/timers/speeds. All users see the same settings. Native entity services allow automations, Companion/Watch and physical-switch integrations without wrapper scripts.
+
+The Settings tab includes editable response curves for house humidity, shower humidity, shower rise above the house average and CO₂. Solid Home and dashed Away lines show requested speed from baseline to maximum; drag the threshold sliders or type values to edit the shared settings. Winter shifts are shown on the graph. The highest demand wins, then ramp/cooldown rules apply; actual fan speed can still differ under native control.
 
 Configure entity mappings in the integration options. Use the card's Settings tab or number entities for individual values; use the options Tuning form to change interdependent thresholds together. Validation enforces `away ≤ home ≤ boost` and `start < full`. The card resolves entity IDs from the integration, so renaming entities is supported.
 
