@@ -39,6 +39,7 @@ class Controller:
             "hold_until": 0,
             "last_command": None,
             "boost_return": None,
+            "boost_cancel_pending": False,
             "events": [],
         }
         self.lock = asyncio.Lock()
@@ -82,6 +83,8 @@ class Controller:
                 data["sauna_active"], bool
             ):
                 raise ValueError("Invalid saved sauna state")
+            if not isinstance(data.get("boost_cancel_pending", False), bool):
+                raise ValueError("Invalid pending boost cancellation")
             self.saved.update(data)
         if not data or "home_mode" not in data:
             occupied = self.boolean("home_entity")
@@ -324,6 +327,7 @@ class Controller:
                 self.saved["last_command"] = None
             self.saved["boost_until"] = 0
             self.saved["boost_return"] = None
+            self.saved["boost_cancel_pending"] = False
             self.record(
                 "Automatic control enabled"
                 if value
@@ -337,6 +341,15 @@ class Controller:
         async with self.lock:
             previous = deepcopy(self.saved)
             if cancel:
+                # An explicit stop returns to live demand, not the slow automatic
+                # release path. Persist it until native protection/ack permits it.
+                self.saved["boost_cancel_pending"] = bool(
+                    self.saved["enabled"]
+                    and (
+                        self.saved["boost_until"]
+                        or self.saved["boost_return"] is not None
+                    )
+                )
                 self.saved["boost_until"] = 0
             else:
                 fan = self.hass.states.get(self.config["fan_entity"])
@@ -348,6 +361,7 @@ class Controller:
                     raise ServiceValidationError(
                         "The fan must be on in Home or Away mode"
                     )
+                self.saved["boost_cancel_pending"] = False
                 if not self.saved["boost_until"] and self.saved["boost_return"] is None:
                     self.saved["boost_return"] = fan.attributes.get("percentage")
                 self.saved["hold_until"] = 0
@@ -359,7 +373,8 @@ class Controller:
                 "Manual boost cancelled" if cancel else "Timed manual boost requested"
             )
             await self.commit_action(previous)
-            self.pending = None
+            if not cancel:
+                self.pending = None
         await self.tick()
 
     async def resume(self):
@@ -507,6 +522,7 @@ class Controller:
                 self.saved["last_command"] = None
                 self.saved["boost_until"] = 0
                 self.saved["boost_return"] = None
+                self.saved["boost_cancel_pending"] = False
                 self.record("External fan adjustment; automatic control paused")
                 await self.persist()
             if now < self.saved["hold_until"]:
@@ -522,6 +538,22 @@ class Controller:
                         await self.write(target, "Manual boost finished", now)
                     await self.persist()
                 self.state = "Automation off"
+                self.publish()
+                return
+            if self.saved["boost_cancel_pending"]:
+                # Result already includes all live RH/CO2 and fallback demands.
+                # All native readiness, external ownership and ack gates above
+                # still apply. Do not wait ten minutes after the user presses Stop.
+                if abs(result.target - current) >= 1:
+                    await self.write(
+                        result.target, "Manual boost stopped; " + result.reason, now
+                    )
+                if not self.error:
+                    self.saved["boost_cancel_pending"] = False
+                    self.saved["boost_return"] = None
+                    self.lower_since = 0
+                    self.state = result.reason
+                    await self.persist()
                 self.publish()
                 return
             if not boost and self.saved["boost_until"]:

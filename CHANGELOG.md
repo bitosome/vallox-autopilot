@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+- Stop boost immediately returns to current automatic demand instead of waiting through the normal cooldown and slow ramp-down.
+- Preserve pending cancellation across restart/native protection, respect external fan changes, and retain visible command failures.
+- Automatic timer expiry retains the normal gradual release; Auto-off cancellation restores the pre-boost speed.
+
 ## 0.3.0
 
 - Editable Home/Away fan-response curves for house humidity, shower humidity, shower rise and CO₂, with current readings and winter offsets.

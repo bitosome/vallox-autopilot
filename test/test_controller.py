@@ -194,6 +194,105 @@ class Runtime(unittest.IsolatedAsyncioTestCase):
         await self.m.boost(True)
         self.assertEqual(self.commands[-1]["percentage"], 30)
 
+    async def test_stop_boost_auto_returns_immediately_to_live_demand(self):
+        await self.m.enabled(True)
+        await self.m.boost()
+        self.assertEqual(self.commands[-1]["percentage"], 80)
+        await self.m.boost(True)
+        self.assertEqual(self.commands[-1]["percentage"], 30)
+        self.assertFalse(self.m.saved["boost_cancel_pending"])
+        self.assertIsNone(self.m.saved["boost_return"])
+        # Pressing again is harmless and cannot bypass a new normal cooldown.
+        self.fan(60)
+        self.m.saved["last_command"] = 60
+        self.m.pending = None
+        before = len(self.commands)
+        await self.m.boost(True)
+        self.assertEqual(len(self.commands), before)
+
+    async def test_stop_boost_keeps_current_co2_demand(self):
+        await self.m.enabled(True)
+        await self.m.boost()
+        self.hass.states.async_set("sensor.co2", "1200", {"unit_of_measurement": "ppm"})
+        await self.m.boost(True)
+        self.assertEqual(self.commands[-1]["percentage"], 55)
+
+    async def test_stop_boost_respects_fallback_and_full_humidity_demand(self):
+        await self.m.enabled(True)
+        await self.m.boost()
+        self.hass.states.async_set("sensor.shower", "90", {"unit_of_measurement": "%"})
+        await self.m.boost(True)
+        self.assertEqual(self.commands[-1]["percentage"], 80)
+        self.assertFalse(self.m.saved["boost_cancel_pending"])
+        await self.m.boost()
+        self.hass.states.async_set("input_boolean.home", "off")
+        self.hass.states.async_set("sensor.shower", "unavailable")
+        await self.m.boost(True)
+        self.assertEqual(self.commands[-1]["percentage"], 30)
+
+    async def test_stop_boost_survives_protection_and_restart(self):
+        await self.m.enabled(True)
+        await self.m.boost()
+        self.hass.states.async_set("sensor.cell", "Defrost")
+        await self.m.boost(True)
+        self.assertEqual(len(self.commands), 1)
+        self.assertTrue(self.m.saved["boost_cancel_pending"])
+        other = Controller(self.hass, self.entry)
+        await other.setup()
+        try:
+            self.assertTrue(other.saved["boost_cancel_pending"])
+            self.hass.states.async_set("sensor.cell", "Heat Recovery")
+            await other.tick()
+            await self.hass.async_block_till_done()
+            self.assertEqual(self.commands[-1]["percentage"], 30)
+            self.assertFalse(other.saved["boost_cancel_pending"])
+        finally:
+            await other.close()
+
+    async def test_stop_boost_does_not_overwrite_external_speed(self):
+        await self.m.enabled(True)
+        await self.m.boost()
+        await self.m.tick()  # acknowledge boost before an external adjustment
+        self.fan(42)
+        await self.m.boost(True)
+        self.assertEqual(len(self.commands), 1)
+        self.assertEqual(self.m.state, "Manual hold")
+        self.assertFalse(self.m.saved["boost_cancel_pending"])
+
+    async def test_stop_boost_failed_save_does_not_send_command(self):
+        await self.m.enabled(True)
+        await self.m.boost()
+        with patch.object(
+            self.m.store, "async_save", AsyncMock(side_effect=OSError("disk full"))
+        ):
+            with self.assertRaises(OSError):
+                await self.m.boost(True)
+        self.assertEqual(len(self.commands), 1)
+        self.assertGreater(self.m.saved["boost_until"], time.time())
+        self.assertFalse(self.m.saved["boost_cancel_pending"])
+
+    async def test_stop_boost_failure_remains_pending_and_visible(self):
+        await self.m.enabled(True)
+        await self.m.boost()
+
+        async def fail(service):
+            raise HomeAssistantError("offline")
+
+        self.hass.services.async_register("fan", "set_percentage", fail)
+        await self.m.boost(True)
+        self.assertEqual(self.m.state, "Command failed")
+        self.assertTrue(self.m.saved["boost_cancel_pending"])
+        self.assertIn("offline", self.m.details["error"])
+        self.assertGreater(self.m.saved["hold_until"], time.time())
+
+    async def test_natural_boost_expiry_keeps_automatic_release_delay(self):
+        await self.m.enabled(True)
+        await self.m.boost()
+        self.m.saved["boost_until"] = time.time() - 1
+        await self.m.tick()
+        self.assertEqual(len(self.commands), 1)
+        self.assertIn("Holding airflow", self.m.details["notice"])
+
     async def test_boost_external_change_cancels(self):
         await self.m.boost()
         await self.m.tick()

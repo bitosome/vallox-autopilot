@@ -9,7 +9,7 @@ A Home Assistant integration and bundled dashboard card for gradual, configurabl
 1. Install the native Vallox integration and confirm its fan, humidity, CO₂ and temperature entities work.
 2. Add `https://github.com/bitosome/vallox-autopilot` to HACS as an **Integration**, download and restart Home Assistant.
 3. Add **Vallox Autopilot** in Settings → Devices & services. Select the native fan, dry-house humidity sensors, shower humidity, CO₂ and heat-recovery/outdoor sensors. Leave the occupancy input empty to use the integration’s shared Home mode switch (`on` = Home, `off` = Away). For sauna detection, choose heater current sensors in amperes, or an existing external sauna binary sensor. Keep shower sensors out of the dry-house group.
-4. Add the **Vallox Autopilot** dashboard card and select its Status sensor. The module registers automatically; YAML dashboards can load `/vallox_autopilot/card.js?v=0.3.0` as a JavaScript module.
+4. Add the **Vallox Autopilot** dashboard card and select its Status sensor. The module registers automatically; YAML dashboards can load `/vallox_autopilot/card.js?v=0.3.1` as a JavaScript module.
 5. Review settings before turning Auto on. New controllers start **off**.
 
 ```yaml
@@ -24,7 +24,7 @@ name: Ventilation
 - Linear interpolation between configurable start/full-boost thresholds. Home/away baselines, maximum boost, up/down ramp and release delay are configurable.
 - Sauna suppresses **this controller's** humidity demand. CO₂ and manual boost remain available. Native Vallox RH/CO₂ sensors may still increase actual airflow independently.
 - Winter optionally lowers humidity thresholds below a configurable outside temperature. This is a configurable condensation-management policy, not a substitute for dew-point/surface-temperature measurement.
-- Manual Boost is a timed demand. It immediately requests the configured boost speed, works with Auto off, and restores the prior requested speed when it expires if nobody changed the fan. With Auto on, demand falls gradually after the release delay.
+- Manual Boost is a timed demand. It immediately requests the configured boost speed, works with Auto off, and restores the prior requested speed when it expires if nobody changed the fan. With Auto on, natural expiry falls gradually after the release delay. Pressing Stop boost explicitly returns immediately to current automatic demand, without that delay or ramp. Active humidity/CO₂/fallback demand, external overrides and native protection still apply. A stop waiting for protection is retained across restart.
 - Home/Away native profiles only. Fireplace, Extra, Auto, native Boost, fan off, unavailable heat-recovery state and defrost suspend writes. The controller never shuts off ventilation, changes fan balance, bypass, heaters or defrost parameters.
 - Changing the native requested percentage creates a temporary manual hold. Native **measured** speed changes do not. Resume releases a hold; Auto must be on for ongoing automatic control.
 - Missing/stale sensor readings use at least the configured home baseline; known high CO₂/humidity demands may still increase speed. Missing sauna state inhibits controller humidity boost.
