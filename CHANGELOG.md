@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.5
+
+- Classify Autopilot as a service so configured controllers appear on the Integrations page, preserving existing entries and settings.
+
 ## 0.4.4
 
 - Compact the speed tile and place Boost alongside a clearly labelled native speed setting.
