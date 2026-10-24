@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.7
+
+- Bundle ventilation brand icons for light and dark themes at standard and high resolution.
+
 ## 0.4.6
 
 - Move section tabs below the content to match the heat-pump card navigation.

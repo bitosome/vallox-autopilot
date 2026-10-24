@@ -1,1 +1,4 @@
 Portions of the shared visual helpers derive from Space Hub Card and its contributors, including Ian Richardson, under the MIT license. See src/shared/PROVENANCE.md for source attribution.
+
+Integration brand icons use Material Design Icons' air-filter glyph (@mdi/js),
+Apache License 2.0, https://github.com/Templarian/MaterialDesign.

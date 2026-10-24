@@ -1,7 +1,7 @@
 """Public integration constants; no installation-specific entities."""
 
 DOMAIN = "vallox_autopilot"
-VERSION = "0.4.6"
+VERSION = "0.4.7"
 PLATFORMS = ["sensor", "switch", "button", "number", "binary_sensor"]
 CARD_URL = "/vallox_autopilot/card.js"
 DEFAULTS = {
