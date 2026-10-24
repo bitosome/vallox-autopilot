@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.4
+
+- Compact the speed tile and place Boost alongside a clearly labelled native speed setting.
+- Display Vallox-reported operating speed as the main value and bar, independently of the profile setting.
+- Read the live speed sensor when available; never substitute a setting for unavailable feedback.
+
 ## 0.4.3
 
 - Remove the Auto toggle and demand reason from the speed tile, preserving automatic control.
