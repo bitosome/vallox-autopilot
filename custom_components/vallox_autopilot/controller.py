@@ -14,12 +14,13 @@ from homeassistant.helpers.event import (
     async_track_state_change_event,
     async_track_time_interval,
 )
-from homeassistant.helpers.storage import Store
 from homeassistant.helpers import entity_registry as er
 from .const import DOMAIN, DEFAULTS, BINDINGS
 from .engine import demand, ramp, validate
 from .sauna import SaunaDetector
 from .curves import validate_points, validate_saved, effective_curves
+from .readback import SpeedReadback
+from .storage import StrictStore
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ class Controller:
         self.entry = entry
         self.config = {**DEFAULTS, **entry.data, **entry.options}
         validate(self.config)
-        self.store = Store(hass, 1, f"{DOMAIN}.{entry.entry_id}")
+        self.store = StrictStore(hass, 1, f"{DOMAIN}.{entry.entry_id}")
         self.saved = {
             "enabled": False,
             "home_mode": True,
@@ -58,6 +59,7 @@ class Controller:
         self.sauna = SaunaDetector()
         self.sauna_timer = None
         self.sauna_deadline = None
+        self.speed_readback = SpeedReadback(hass, self.tick)
 
     async def setup(self):
         data = await self.store.async_load()
@@ -144,6 +146,8 @@ class Controller:
             else None,
             events=list(self.saved["events"]),
             error=self.error,
+            speed_refresh_pending=self.speed_readback.active,
+            speed_refresh_error=self.speed_readback.error,
             response_curves=effective_curves(
                 self.config, self.saved["response_curves"]
             ),
@@ -281,6 +285,8 @@ class Controller:
             previous = self.config
             self.config = {**DEFAULTS, **entry.data, **entry.options}
             validate(self.config)
+            if previous.get("fan_entity") != self.config.get("fan_entity"):
+                self.speed_readback.close()
             self.bind(
                 reset_sauna=any(
                     previous.get(k) != self.config.get(k)
@@ -481,6 +487,11 @@ class Controller:
             if fan and now - fan.last_reported.timestamp() > c["stale_minutes"] * 60:
                 protection = True
             profile = fan.attributes.get("preset_mode") if fan else None
+            speed_state = self.hass.states.get(c.get("actual_speed_entity", ""))
+            speed_reported = speed_state.last_reported.timestamp() if speed_state else None
+            # Native telemetry polls every minute. Do not display an old reading
+            # as live for the configurable 30-minute room-sensor grace period.
+            speed_fresh = speed_reported is not None and now - speed_reported <= 150
             self.details = {
                 "controller": "vallox_autopilot",
                 "home_humidity": home,
@@ -491,7 +502,9 @@ class Controller:
                 "co2_rag": result.co2_rag,
                 "desired_speed": result.target,
                 "requested_speed": current,
-                "actual_speed": self.value(c.get("actual_speed_entity"), 0, 100, "%"),
+                "actual_speed": self.value(c.get("actual_speed_entity"), 0, 100, "%") if speed_fresh else None,
+                "actual_speed_stale": not speed_fresh,
+                "actual_speed_observed_at": speed_reported,
                 "reason": result.reason,
                 "winter": result.winter,
                 "sauna_inhibited": sauna is not False,
@@ -643,6 +656,7 @@ class Controller:
                 {"entity_id": self.config["fan_entity"], "percentage": target},
                 blocking=True,
             )
+            self.speed_readback.start(self.config["fan_entity"])
             self.record(f"{reason}: requested {target}%")
             await self.persist()
         except HomeAssistantError as err:
@@ -657,6 +671,7 @@ class Controller:
 
     async def close(self, persist=True):
         self.closed = True
+        self.speed_readback.close()
         if self.sauna_timer:
             self.sauna_timer()
             self.sauna_timer = None

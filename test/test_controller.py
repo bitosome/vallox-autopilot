@@ -129,6 +129,34 @@ class Runtime(unittest.IsolatedAsyncioTestCase):
         await self.m.tick()
         self.assertEqual(self.commands, [])
 
+    async def test_old_speed_is_not_presented_as_live_room_telemetry(self):
+        with patch('custom_components.vallox_autopilot.controller.time.time', return_value=time.time() + 151):
+            await self.m.tick()
+        self.assertTrue(self.m.details['actual_speed_stale'])
+        self.assertIsNone(self.m.details['actual_speed'])
+        self.assertEqual(self.m.details['requested_speed'], 30)
+        self.assertEqual(self.commands, [])
+
+    async def test_command_starts_telemetry_refresh_without_optimistic_actual_speed(self):
+        await self.m.boost()
+        self.assertTrue(self.m.speed_readback.active)
+        await self.m.tick()
+        self.assertEqual(self.m.details['actual_speed'], 60)
+        self.assertEqual(self.m.details['requested_speed'], 80)
+        self.assertTrue(self.m.details['speed_refresh_pending'])
+
+    async def test_real_storage_failure_cannot_acknowledge_boost_or_dispatch(self):
+        from homeassistant.util.file import WriteError
+        await self.m.persist()
+        before = self.m.store.path.read_bytes()
+        with patch('custom_components.vallox_autopilot.storage.save_json', side_effect=WriteError('Disk full')):
+            with self.assertRaises(WriteError):
+                await self.m.boost()
+        self.assertEqual(self.m.saved['boost_until'], 0)
+        self.assertIsNone(self.m.saved['last_command'])
+        self.assertEqual(self.commands, [])
+        self.assertEqual(self.m.store.path.read_bytes(), before)
+
     async def test_gradual_increase(self):
         self.hass.states.async_set("sensor.co2", "1400", {"unit_of_measurement": "ppm"})
         await self.m.enabled(True)
