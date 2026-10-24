@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.2
+
+- Replace the generic filter icon with original ventilation fan artwork, with light/dark variants and 256/512 px assets.
+
 ## 0.4.7
 
 - Bundle ventilation brand icons for light and dark themes at standard and high resolution.

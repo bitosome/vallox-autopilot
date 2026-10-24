@@ -1,4 +1,6 @@
 Portions of the shared visual helpers derive from Space Hub Card and its contributors, including Ian Richardson, under the MIT license. See src/shared/PROVENANCE.md for source attribution.
 
-Integration brand icons use Material Design Icons' air-filter glyph (@mdi/js),
-Apache License 2.0, https://github.com/Templarian/MaterialDesign.
+Integration brand icons are original Vallox Autopilot artwork, distributed under
+the repository MIT license. Editable light and dark SVG sources are included in
+custom_components/vallox_autopilot/brand/. These are project artwork, not an
+official Vallox manufacturer logo.
