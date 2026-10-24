@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.5
+
+- Match the heat-pump header padding, subtitle spacing and centered icon alignment while preserving a full-size Home/Away touch target.
+
 ## 0.5.2
 
 - Replace the generic filter icon with original ventilation fan artwork, with light/dark variants and 256/512 px assets.
