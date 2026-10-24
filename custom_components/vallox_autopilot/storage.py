@@ -49,10 +49,14 @@ class StrictStore:
         envelope = {'version': self.version, 'minor_version': 1, 'key': self.key, 'data': deepcopy(data)}
         async with self.lock:
             job = self.hass.async_add_executor_job(self._write, envelope)
-            try:
-                await asyncio.shield(job)
-            except asyncio.CancelledError:
-                # A cancelled executor await does not stop its worker. Keep the
-                # lock until it completes, otherwise an older write can win.
-                await job
-                raise
+            cancelled = None
+            while not job.done():
+                try:
+                    await asyncio.shield(job)
+                except asyncio.CancelledError as err:
+                    # Repeated cancellation must not release the lock while the
+                    # thread still writes: an older snapshot could finish last.
+                    cancelled = err
+            job.result()
+            if cancelled is not None:
+                raise cancelled

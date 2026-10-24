@@ -51,6 +51,8 @@ class StorageTests(unittest.IsolatedAsyncioTestCase):
             old = asyncio.create_task(self.store.async_save({'sequence': 1}))
             await self.hass.async_add_executor_job(entered.wait, 5)
             old.cancel()
+            await asyncio.sleep(0)
+            old.cancel()
             newer = asyncio.create_task(self.store.async_save({'sequence': 2}))
             await asyncio.sleep(0)
             self.assertFalse(newer.done())
