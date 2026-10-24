@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2
+
+- Match the main speed and bar to the native fan adjustment value, labelled Fan speed setting.
+- Keep unit-reported speed in Details; remove the request/demand subline.
+- Keep metric status dots and accessible status descriptions without text badges.
+
 ## 0.4.0
 
 - Replace threshold sliders with directly draggable multi-point response curves, with point addition/removal, touch/keyboard controls and precise numeric editing.
