@@ -99,6 +99,7 @@ class Runtime(unittest.IsolatedAsyncioTestCase):
         sensor("sensor.actual", 60, "%")
         sensor("input_boolean.home", "on")
         sensor("binary_sensor.sauna", "off")
+        er.async_get(self.hass).async_get_or_create("fan", "vallox", "test", suggested_object_id="test")
         self.fan(30)
 
         async def call(service):

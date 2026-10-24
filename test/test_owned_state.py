@@ -221,3 +221,22 @@ class OwnedState(unittest.IsolatedAsyncioTestCase):
         entry = registry.async_get_or_create("switch", "vallox_autopilot", "owned")
         with self.assertRaises(ValueError):
             validate_bindings(self.hass, {**BINDINGS, "home_entity": entry.entity_id})
+
+    async def test_reject_non_native_fan_even_with_matching_presets(self):
+        from homeassistant.helpers import entity_registry as er
+        er.async_get(self.hass).async_get_or_create("fan", "template", "other", suggested_object_id="other")
+        self.hass.states.async_set("fan.other", "on", {"preset_modes": ["Home", "Away"]})
+        with self.assertRaises(ValueError):
+            validate_bindings(self.hass, {**BINDINGS, "fan_entity": "fan.other"})
+
+    async def test_reject_disabled_native_fan(self):
+        from homeassistant.helpers import entity_registry as er
+        er.async_get(self.hass).async_update_entity("fan.test", disabled_by=er.RegistryEntryDisabler.USER)
+        with self.assertRaises(ValueError):
+            validate_bindings(self.hass, BINDINGS)
+
+    async def test_reject_controller_humidity_feedback(self):
+        from homeassistant.helpers import entity_registry as er
+        e = er.async_get(self.hass).async_get_or_create("sensor", "vallox_autopilot", "humidity")
+        with self.assertRaises(ValueError):
+            validate_bindings(self.hass, {**BINDINGS, "home_humidity_entities": [e.entity_id]})

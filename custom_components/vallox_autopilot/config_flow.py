@@ -32,7 +32,7 @@ def validate_bindings(hass, data):
             "Choose either sauna current sensors or an external sauna entity"
         )
     registry = er.async_get(hass)
-    for key in ("home_entity", "sauna_entity", "sauna_current_entities"):
+    for key in BINDINGS:
         values = data.get(key, [])
         for entity_id in (
             values if isinstance(values, list) else [values] if values else []
@@ -44,6 +44,13 @@ def validate_bindings(hass, data):
         raise ValueError("Choose at least one home humidity sensor")
     if data["shower_humidity_entity"] in data["home_humidity_entities"]:
         raise ValueError("Keep the shower sensor out of the home group")
+    fan_registration = registry.async_get(data["fan_entity"])
+    if (
+        not fan_registration
+        or fan_registration.platform != "vallox"
+        or fan_registration.disabled_by
+    ):
+        raise ValueError("Select an enabled fan from the native Vallox integration")
     fan = hass.states.get(data["fan_entity"])
     if fan is None or not {"Home", "Away"}.intersection(
         fan.attributes.get("preset_modes", [])

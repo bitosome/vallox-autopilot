@@ -36,7 +36,7 @@ The defaults are starting values, **not commissioned airflow rates**. Set the mi
 
 One device contains Status, dry-house/shower humidity, CO₂, target speed, Automation and Home mode switches, Sauna active binary sensor, Boost / Cancel boost / Resume buttons, and number entities for all thresholds/timers/speeds. All users see the same settings. Native entity services allow automations, Companion/Watch and physical-switch integrations without wrapper scripts.
 
-The Settings tab includes a direct point editor for house humidity, shower humidity, shower rise above the house average and CO₂. Choose the Home or Away occupancy curve, drag a point in both directions, or use arrow keys / the selected point’s numeric fields. Add point inserts a point on the existing line; Remove point removes the selection. Each curve supports 2–12 ordered points. Speed cannot decrease as humidity/CO₂ increases, and global baseline/maximum speeds remain authoritative. The graph zooms around the points for touch editing; numeric fields can move a point anywhere within its allowed input range.
+The Settings tab shows compact response-curve summaries for house humidity, shower humidity, shower rise above the house average and CO₂. Select a summary to open its focused editor. The interaction takes inspiration from [FanControl’s graph editor](https://getfancontrol.com/docs/#graph): drag points, tap unused graph space to add a point, and select point chips for precise numeric edits. Comparison with the other occupancy curve is optional. Choose the Home or Away occupancy curve, drag a point in both directions, or use arrow keys / the selected point’s numeric fields. Add point inserts a point on the existing line; Remove point removes the selection. Each curve supports 2–12 ordered points. Speed cannot decrease as humidity/CO₂ increases, and global baseline/maximum speeds remain authoritative. The graph holds its scale during editing; Fit reframes the points. This keeps touch targets stable; numeric fields can move a point anywhere within its allowed input range.
 
 Edits save automatically on release/commit through `vallox_autopilot.set_response_curve`, targeting the card’s Status entity. The backend stores curves and per-curve revisions in its HA Store, shared by all users and retained across updates/restarts. A stale concurrent edit is rejected; the card retains the draft and offers Reload shared curve or Retry. There is no browser-only authoritative setting and no service call on every drag movement. Cancelling a pointer gesture discards it.
 
@@ -50,7 +50,7 @@ Home mode is shared and persisted across restarts and updates. When using an ext
 
 Sauna detection uses the highest configured heater-current reading: above 1 A for 5 seconds activates it; all currents below the threshold for 15 minutes release it. These values are configurable. Missing current data makes Sauna active unavailable and inhibits controller humidity boosts. An active sauna survives restart with a fresh cooldown, so thermostat pauses do not prematurely enable humidity boosts.
 
-History in Details records the latest 40 control decisions and interruptions. HA Recorder supplies longer native sensor/entity history. RAG labels reflect configured operating thresholds, including low-humidity warnings; they do not certify indoor air safety.
+The History tab embeds Home Assistant’s native history graphs, like the NIBE card. Choose Fan speed (reported speed and controller target), Humidity, CO₂ or Temperature, and 6/24/72 hours. Graphs use configured entity mappings, including renamed entities, and HA Recorder history. Missing samples remain gaps. Details records the latest 40 control decisions and interruptions. RAG labels reflect configured operating thresholds, including low-humidity warnings; they do not certify indoor air safety.
 
 ## Native Vallox and winter
 
@@ -69,3 +69,5 @@ python3 -m http.server 8774 --bind 127.0.0.1
 ```
 
 The controller is the only command writer; `engine.py` is pure policy, native HA platforms expose shared state, and the Lit card only calls entity services. Space Hub design tokens and glow helper are vendored with provenance; NIBE supplies the compact visual hierarchy. No runtime dependency on sibling repositories or cloud services.
+
+The control binding must be an enabled native `vallox` fan, and Autopilot output entities cannot be mapped back as inputs. The controller writes `fan.set_percentage` directly; core Vallox sends that setting to the unit over its local API. No legacy helper or automation is part of this write path. Requested percentage and reported operating speed remain distinct.
