@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.3
+
+- Remove the Auto toggle and demand reason from the speed tile, preserving automatic control.
+
 ## 0.4.2
 
 - Match the main speed and bar to the native fan adjustment value, labelled Fan speed setting.
