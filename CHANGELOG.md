@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.6
+
+- Move section tabs below the content to match the heat-pump card navigation.
+
 ## 0.4.5
 
 - Classify Autopilot as a service so configured controllers appear on the Integrations page, preserving existing entries and settings.
