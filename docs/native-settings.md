@@ -6,7 +6,7 @@ This controller adds demand planning above Home Assistant's native Vallox integr
 
 Home Assistant's `fan.set_percentage` sets the speed of the **currently active profile**. Zero shuts down ventilation, so Autopilot never requests zero. Profile selectors, Home/Away/Boost supply-temperature numbers, bypass lock, filter-change date, temperatures, RH, CO₂, fan speed/RPM, post-heater status and heat-recovery state are native entities when the unit supports them. Availability depends on the model and firmware.
 
-Autopilot operates only in Home/Away. It leaves other profiles to the device, and does not set a native Boost profile because that would introduce another timer/owner. The configured speed is not an airflow measurement or guaranteed actual fan percentage.
+Autopilot operates only in Home/Away. It leaves other profiles to the device, and does not set a native Boost profile because that would introduce another timer/owner. The configured speed is a shared operating setting that preserves the commissioned supply/extract balance. It is not an airflow measurement or either motor’s RPM.
 
 Native per-profile RH/CO₂ control, humidity basic level/automatic mode, CO₂ setpoint, supply/extract ratio, heater configuration and detailed defrost parameters can exist in the local MyVallox API without being exposed as HA setting entities. This integration does **not** make undocumented register writes or override them. Manage commissioning settings in MyVallox with the unit's manual/installer.
 
@@ -36,3 +36,11 @@ The filter entity shows the device's recorded service schedule, not a direct mea
 - [MyVallox Control manual](https://res.cloudinary.com/vallox/image/upload/v1692707935/FileStock/ValidManuals/Manual_Vallox_MyVallox_Control_ENG.pdf)
 
 Reviewed 2026-10-23. No installation-specific raw metrics, addresses or credentials belong in this public repository.
+
+## Percentage versus motor telemetry
+
+With native Home selected, `fan.percentage` reads/writes `A_CYC_HOME_SPEED_SETTING`. `A_CYC_FAN_SPEED` is a separate unit operating percentage; the native sensor does not calculate it by averaging RPM. `A_CYC_SUPP_FAN_SPEED` and `A_CYC_EXTR_FAN_SPEED` are individual RPM measurements. `A_CYC_IO_HEATER` supplies the native Post-heater on/off entity. The card leads with **Fan setting**, shows the independent RPM/heat output, and keeps unit operating percentage in diagnostic details/history.
+
+Vallox documents that native CO₂ control raises ventilation when its threshold is exceeded and preserves the active mode's minimum setting. The commissioning balance alone does not explain a changing gap between requested and operating percentages. No exact additive CO₂ formula or linear conversion from percentage to RPM is assumed.
+
+Reference: [Vallox MV control and adjustment chart, supply/extract balance and CO₂ control](https://res.cloudinary.com/vallox/image/upload/v1763130835/FileStock/DesignerSupport/Adjustmentchart_Vallox_MV_CF.pdf).

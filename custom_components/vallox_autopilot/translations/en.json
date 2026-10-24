@@ -4,21 +4,24 @@
     "step": {
       "user": {
         "title": "Connect ventilation",
-        "description": "Leave external Home/Away empty to use the persistent Home mode switch (on = Home, off = Away). Choose either raw sauna current sensors in amperes or an external sauna entity. Do not select this integration’s own outputs.",
+        "description": "Leave external Home/Away empty to use the persistent Home mode switch (on = Home, off = Away). Choose either raw sauna current sensors in amperes or an external sauna entity. Do not select this integration’s own outputs. Optional native fan RPM and post-heater sensors provide read-only telemetry; enable them in the Vallox integration if needed.",
         "data": {
-          "fan_entity": "Fan entity",
+          "fan_entity": "Native fan control",
           "home_humidity_entities": "Home humidity entities",
           "shower_humidity_entity": "Shower humidity entity",
           "co2_entity": "Co2 entity",
           "home_entity": "External Home/Away source (optional)",
           "sauna_entity": "External sauna state (alternative)",
           "outdoor_entity": "Outdoor entity",
-          "supply_entity": "Supply entity",
-          "extract_entity": "Extract entity",
-          "actual_speed_entity": "Actual speed entity",
+          "supply_entity": "Supply air temperature",
+          "extract_entity": "Extract air temperature",
+          "actual_speed_entity": "Unit operating level (%)",
           "cell_entity": "Cell entity",
           "filter_entity": "Filter entity",
-          "sauna_current_entities": "Sauna heater current sensors"
+          "sauna_current_entities": "Sauna heater current sensors",
+          "supply_fan_speed_entity": "Supply fan speed (RPM, optional)",
+          "extract_fan_speed_entity": "Extract fan speed (RPM, optional)",
+          "post_heater_entity": "Post-heater state (optional)"
         }
       }
     },
@@ -40,21 +43,24 @@
       "bindings": {
         "title": "Entity bindings",
         "data": {
-          "fan_entity": "Fan entity",
+          "fan_entity": "Native fan control",
           "home_humidity_entities": "Home humidity entities",
           "shower_humidity_entity": "Shower humidity entity",
           "co2_entity": "Co2 entity",
           "home_entity": "External Home/Away source (optional)",
           "sauna_entity": "External sauna state (alternative)",
           "outdoor_entity": "Outdoor entity",
-          "supply_entity": "Supply entity",
-          "extract_entity": "Extract entity",
-          "actual_speed_entity": "Actual speed entity",
+          "supply_entity": "Supply air temperature",
+          "extract_entity": "Extract air temperature",
+          "actual_speed_entity": "Unit operating level (%)",
           "cell_entity": "Cell entity",
           "filter_entity": "Filter entity",
-          "sauna_current_entities": "Sauna heater current sensors"
+          "sauna_current_entities": "Sauna heater current sensors",
+          "supply_fan_speed_entity": "Supply fan speed (RPM, optional)",
+          "extract_fan_speed_entity": "Extract fan speed (RPM, optional)",
+          "post_heater_entity": "Post-heater state (optional)"
         },
-        "description": "Leave external Home/Away empty to use the persistent Home mode switch (on = Home, off = Away). Choose either raw sauna current sensors in amperes or an external sauna entity. Do not select this integration’s own outputs."
+        "description": "Leave external Home/Away empty to use the persistent Home mode switch (on = Home, off = Away). Choose either raw sauna current sensors in amperes or an external sauna entity. Do not select this integration’s own outputs. Optional native fan RPM and post-heater sensors provide read-only telemetry; enable them in the Vallox integration if needed."
       },
       "tuning": {
         "title": "Demand and timing",

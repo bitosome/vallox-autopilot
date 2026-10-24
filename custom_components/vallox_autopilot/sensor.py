@@ -32,6 +32,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
                 ("shower_humidity", "Shower humidity", "%", SensorDeviceClass.HUMIDITY),
                 ("co2", "CO₂", "ppm", SensorDeviceClass.CO2),
                 ("desired_speed", "Target speed", "%", None),
+                ("fan_setting", "Fan setting", "%", None),
             ]
         ]
     )

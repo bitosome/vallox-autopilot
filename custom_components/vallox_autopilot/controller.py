@@ -197,6 +197,16 @@ class Controller:
             return None
         return float(self.hass.states.get(entity).state)
 
+    def fan_rpm(self, key, now):
+        """Read native rotational telemetry without deriving it from fan demand."""
+        entity = self.config.get(key)
+        state = self.hass.states.get(entity) if entity else None
+        # Vallox polls once per minute. An old rotor reading must not look live,
+        # even when room sensors are allowed a longer freshness grace period.
+        if state is None or now - state.last_reported.timestamp() > 150:
+            return None
+        return self.value(entity, 0, 10000, "rpm")
+
     def input_issues(self):
         c = self.config
         specs = [(e, 0, 100, "%") for e in c["home_humidity_entities"]]
@@ -476,6 +486,17 @@ class Controller:
             current = fan.attributes.get("percentage") if fan else None
             if not isinstance(current, (int, float)) or not isfinite(current):
                 current = None
+            setting = None
+            if fan and fan.state == "off":
+                setting = 0
+            elif (
+                fan
+                and fan.state == "on"
+                and current is not None
+                and not isinstance(current, bool)
+                and 0 <= current <= 100
+            ):
+                setting = current
             cell = self.hass.states.get(c["cell_entity"])
             cell_state = cell.state if cell else "unavailable"
             protection = (
@@ -502,9 +523,15 @@ class Controller:
                 "co2_rag": result.co2_rag,
                 "desired_speed": result.target,
                 "requested_speed": current,
+                "fan_setting": setting,
                 "actual_speed": self.value(c.get("actual_speed_entity"), 0, 100, "%") if speed_fresh else None,
                 "actual_speed_stale": not speed_fresh,
                 "actual_speed_observed_at": speed_reported,
+                "supply_fan_rpm": self.fan_rpm("supply_fan_speed_entity", now),
+                "extract_fan_rpm": self.fan_rpm("extract_fan_speed_entity", now),
+                # Native availability, not time since the last state change,
+                # determines whether a heater that remains off is known off.
+                "post_heater_active": self.boolean("post_heater_entity"),
                 "reason": result.reason,
                 "winter": result.winter,
                 "sauna_inhibited": sauna is not False,

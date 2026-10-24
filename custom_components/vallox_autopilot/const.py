@@ -1,7 +1,7 @@
 """Public integration constants; no installation-specific entities."""
 
 DOMAIN = "vallox_autopilot"
-VERSION = "0.5.5"
+VERSION = "0.6.0"
 PLATFORMS = ["sensor", "switch", "button", "number", "binary_sensor"]
 CARD_URL = "/vallox_autopilot/card.js"
 DEFAULTS = {
@@ -65,6 +65,9 @@ BINDINGS = {
     "supply_entity": ("sensor", False, False),
     "extract_entity": ("sensor", False, False),
     "actual_speed_entity": ("sensor", False, False),
+    "supply_fan_speed_entity": ("sensor", False, False),
+    "extract_fan_speed_entity": ("sensor", False, False),
+    "post_heater_entity": ("binary_sensor", False, False),
     "cell_entity": ("sensor", False, True),
     "filter_entity": ("sensor", False, False),
 }

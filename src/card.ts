@@ -1,4 +1,4 @@
-import {LitElement,html,css,nothing} from 'lit';
+import {LitElement,html,nothing} from 'lit';
 import {designTokens} from './shared/design-tokens';
 import {buildGlow} from './shared/glow';
 import {styles} from './styles';
@@ -8,6 +8,7 @@ type State={state:string;attributes:Record<string,any>};
 type Hass={states:Record<string,State>;entities?:Record<string,{platform?:string;config_entry_id?:string;unique_id?:string}>;callService:(domain:string,service:string,data:Record<string,unknown>)=>Promise<unknown>};
 const icon=(name:string)=>html`<ha-icon icon=${name}></ha-icon>`;
 const value=(n:any,unit='')=>typeof n==='number'&&Number.isFinite(n)?`${Math.round(n*10)/10}${unit}`:'—';
+const validNumber=(n:any,min=0,max=Infinity):number|null=>typeof n==='number'&&Number.isFinite(n)&&n>=min&&n<=max?n:null;
 export class ValloxAutopilotCard extends LitElement {
  static properties={hass:{attribute:false},config:{state:true},tab:{state:true},error:{state:true},busy:{state:true}};
  hass?:Hass;config?:{entity:string;name?:string};tab='overview';error='';busy=false;
@@ -31,25 +32,39 @@ export class ValloxAutopilotCard extends LitElement {
  private more(entity:string|undefined){if(entity)this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:entity},bubbles:true,composed:true}))}
  private badge(title:string,n:any,unit:string,rag:string,mdi:string,entity?:string){return html`<button class="metric surface" @click=${()=>this.more(entity)} aria-label=${`${title}: ${value(n,unit)}; ${rag==='red'?'Needs attention':rag==='amber'?'Watch':rag==='green'?'In range':'Unavailable'}`}><span class="metric-top">${icon(mdi)}<span class="metric-label">${title}</span><span class=${`dot ${rag}`}></span></span><strong>${value(n)}<small>${unit}</small></strong></button>`}
  private row(label:string,n:any,unit='',entity?:string){return html`<button class="data-row" @click=${()=>this.more(entity)}><span>${label}</span><b>${typeof n==='string'?n:value(n,unit)}</b></button>`}
+ private fanTelemetry(supply:number|null,extract:number|null,heater:boolean|null){const b=this.attrs.bindings??{};
+  const items=[
+   {entity:b.supply_fan_speed_entity,label:'Supply fan',text:supply===null?'Unavailable':`${Math.round(supply).toLocaleString()} rpm`,mdi:'mdi:fan',active:false},
+   {entity:b.extract_fan_speed_entity,label:'Extract fan',text:extract===null?'Unavailable':`${Math.round(extract).toLocaleString()} rpm`,mdi:'mdi:fan',active:false},
+   {entity:b.post_heater_entity,label:'Post-heater',text:heater===null?'Unavailable':heater?'Active':'Off',mdi:'mdi:radiator',active:heater===true},
+  ].filter(item=>item.entity);
+  return items.length?html`<div class="fan-telemetry" aria-label="Measured fan speeds and heater">${items.map(item=>html`<button class=${`telemetry ${item.active?'active':''}`} aria-label=${`${item.label}: ${item.text}`} @click=${()=>this.more(item.entity)}><span class="telemetry-label">${icon(item.mdi)}${item.label}</span><strong>${item.text}</strong></button>`)}</div>`:nothing;
+ }
  private settings(){const a=this.attrs;const groups=[['Airflow',['home_speed','away_speed','boost_speed','boost_minutes']],['Sauna',['sauna_current_threshold','sauna_on_seconds','sauna_off_minutes']],['Winter & timing',['winter_below','winter_rh_reduction','ramp_up','ramp_down','release_minutes','override_minutes','stale_minutes']]] as const;
  return html`<vallox-response-curves .settings=${a.settings??{}} .readings=${a} .curves=${a.response_curves??{}} .revisions=${a.curve_revisions??{}} .winter=${!!a.winter} .inhibited=${!!a.sauna_inhibited} .busy=${this.busy} .saveCurve=${async(detail:any)=>{await this.hass!.callService('vallox_autopilot','set_response_curve',{entity_id:this.config!.entity,...detail})}}></vallox-response-curves>${groups.map(([name,keys])=>html`<details class="surface group"><summary>${name}</summary>${keys.map(key=>{const id=this.entity(key,'number');const s=id?this.hass?.states[id]:undefined;return s?html`<label class="setting"><span>${(s.attributes.friendly_name??key).replace(/^Vallox Autopilot /,'')}</span><span><input type="number" aria-label=${key.replaceAll('_',' ')} .value=${s.state} min=${s.attributes.min} max=${s.attributes.max} step=${s.attributes.step} ?disabled=${this.busy} @change=${(e:Event)=>{const input=e.target as HTMLInputElement;if(input.checkValidity())void this.act(key,'number','set_value',{value:Number(input.value)});else input.value=s.state;}}><small>${s.attributes.unit_of_measurement??''}</small></span></label>`:nothing})}</details>`)}<p class="hint">Shared settings save in Home Assistant. Configure sensor and occupancy mappings in the integration’s options.</p>`}
  protected render(){const s=this.state,a=this.attrs;if(!s||a.controller!=='vallox_autopilot')return html`<ha-card class="notice">Select an available Vallox Autopilot status sensor.</ha-card>`;
  const automation=this.entity('automation','switch'),enabled=automation&&this.hass?.states[automation]?.state==='on';
  const fan=this.hass?.states[a.bindings?.fan_entity];
  const percentage=fan?.attributes.percentage;
- const setting=fan&& !['unknown','unavailable'].includes(fan.state)&&typeof percentage==='number'&&Number.isFinite(percentage)&&percentage>=0&&percentage<=100?percentage:null;
+ const setting=fan?.state==='off'?0:fan?.state==='on'?validNumber(percentage,0,100):null;
  const reported=this.hass?.states[a.bindings?.actual_speed_entity];
  const raw=reported?(reported.state.trim()!==''&&!['unknown','unavailable'].includes(reported.state)?Number(reported.state):null):a.actual_speed;
  const speed=!a.actual_speed_stale&&!['unknown','unavailable'].includes(s.state)&&typeof raw==='number'&&Number.isFinite(raw)&&raw>=0&&raw<=100?raw:null;
- const speedCaption=a.actual_speed_stale?'Waiting for speed reading':a.speed_refresh_pending?'Reported speed · updating':'Reported speed';
- const airflow=fan?.state==='on'&&!['unknown','unavailable'].includes(s.state)&&speed!==null&&speed>0;
- // Rotation rate is proportional to reported speed (1.2s/revolution at 100%).
+ const available=!['unknown','unavailable'].includes(s.state);
+ const supply=available?validNumber(a.supply_fan_rpm):null,extract=available?validNumber(a.extract_fan_rpm):null;
+ const heater=available&&typeof a.post_heater_active==='boolean'?a.post_heater_active:null;
+ const rpmBindings=!!(a.bindings?.supply_fan_speed_entity||a.bindings?.extract_fan_speed_entity);
+ const moving=(a.bindings?.supply_fan_speed_entity&&supply!==null&&supply>0)||(a.bindings?.extract_fan_speed_entity&&extract!==null&&extract>0);
+ const airflow=available&&speed!==null&&speed>0&&(rpmBindings?!!moving:fan?.state==='on');
+ // Decorative rate follows the native operating percentage, not literal RPM.
+ // When RPM sensors are mapped, measured movement must also be confirmed.
  const airflowDuration=airflow?120/Math.max(1,Math.min(100,speed!)):12;
  const boost=!!a.boost_until,glow=buildGlow({weak:'rgba(50,150,220,.12)',strong:'rgba(50,150,220,.22)'},'static',!!enabled||boost);
  return html`<ha-card><div class="root"><header><span class="brand">${icon('mdi:air-filter')}</span><div class="identity"><h1>${this.config?.name??'Ventilation'}</h1><div class="subtitle" id="home-mode">${a.home===true?'At home':a.home===false?'Away':'Occupancy unknown'}${a.winter?' · Winter':''}</div><button class="mode" aria-label="Home/Away mode" aria-describedby="home-mode" title="Home/Away mode" @click=${()=>this.more(a.bindings?.home_entity||a.entities?.home_mode)}></button></div><button class="icon-button" aria-label="Native Vallox controls" title="Native Vallox controls" @click=${()=>this.more(a.bindings?.fan_entity)}>${icon('mdi:tune-vertical')}</button></header>
- <div class="tile-wrap"><div class="glow-under" style=${glow.style}>${glow.overlay}</div><section class="surface hero"><div class="speed"><div class="speed-values"><div class="speed-reading"><strong>${value(speed)}</strong><span>%</span></div><div class="speed-caption" aria-live="polite">${speedCaption}</div></div><div class=${`airflow ${airflow?'flowing':''}`} style=${`--airflow-duration:${airflowDuration.toFixed(1)}s`} aria-hidden="true"><span class="airflow-fan">${icon('mdi:fan')}</span></div></div>
- <div class="track"><div style=${`width:${Math.max(0,Math.min(100,speed??0))}%`}></div></div>
- <div class="actions"><button class="speed-setting" ?disabled=${!fan} @click=${()=>this.more(a.bindings?.fan_entity)}>Setting ${value(setting,'%')}${icon('mdi:tune-vertical')}</button><button class=${`pill ${boost?'active':''}`} ?disabled=${this.busy||!this.entity(boost?'cancel_boost':'boost','button')} @click=${()=>this.act(boost?'cancel_boost':'boost','button','press')}>${icon(boost?'mdi:stop':'mdi:fan-plus')}${boost?'End boost':`Boost · ${a.settings?.boost_minutes??15} min`}</button>${a.hold_until?html`<button class="pill" ?disabled=${this.busy} @click=${()=>this.act('resume','button','press')}>${icon('mdi:play')}Resume auto</button>`:nothing}${boost?html`<span class="hint">Until ${new Date(a.boost_until*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>`:nothing}</div></section></div>
+ <div class="tile-wrap"><div class="glow-under" style=${glow.style}>${glow.overlay}</div><section class="surface hero"><div class="speed"><button class="speed-values" aria-label=${`Fan setting: ${value(setting,'%')}. Open native Vallox controls`} ?disabled=${!fan} @click=${()=>this.more(a.bindings?.fan_entity)}><span class="speed-reading"><strong>${value(setting)}</strong><span>%</span></span><span class="speed-caption" aria-live="polite">Fan setting ${icon('mdi:tune-vertical')}</span></button><div class=${`airflow ${airflow?'flowing':''}`} style=${`--airflow-duration:${airflowDuration.toFixed(1)}s`} aria-hidden="true"><span class="airflow-fan">${icon('mdi:fan')}</span></div></div>
+ <div class="track"><div style=${`width:${setting??0}%`}></div></div>
+ ${this.fanTelemetry(supply,extract,heater)}
+ <div class="actions"><button class=${`pill ${boost?'active':''}`} ?disabled=${this.busy||!this.entity(boost?'cancel_boost':'boost','button')} @click=${()=>this.act(boost?'cancel_boost':'boost','button','press')}>${icon(boost?'mdi:stop':'mdi:fan-plus')}${boost?'End boost':`Boost · ${a.settings?.boost_minutes??15} min`}</button>${a.hold_until?html`<button class="pill" ?disabled=${this.busy} @click=${()=>this.act('resume','button','press')}>${icon('mdi:play')}Resume auto</button>`:nothing}${boost?html`<span class="hint">Until ${new Date(a.boost_until*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>`:nothing}</div></section></div>
  ${a.sauna_inhibited?html`<div class="notice">${icon('mdi:heat-wave')}${a.sauna_active===true?'Controller humidity boost paused for sauna.':'Sauna status unavailable; controller humidity boost paused.'}</div>`:nothing}
  ${a.degraded?html`<details class="notice"><summary>Sensor fallback · minimum ${a.settings?.home_speed??30}%</summary><p>Some inputs cannot be used. Auto keeps at least the Home airflow; higher valid demands still apply.</p>${(a.input_issues??[]).map((issue:any)=>html`<button class="data-row" @click=${()=>this.more(issue.entity_id)}><span>${issue.name}</span><b>${issue.reason}</b></button>`)}</details>`:nothing}
  ${a.notice?html`<p class="hint">${a.notice}</p>`:nothing}${this.error||a.error?html`<div role="alert" class="notice error">${this.error||a.error}</div>`:nothing}

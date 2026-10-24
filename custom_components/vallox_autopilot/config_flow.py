@@ -20,7 +20,12 @@ def bindings_schema(values):
             else {}
         )
         selection = {"domain": domain, "multiple": multiple}
-        if key == "fan_entity":
+        if key in (
+            "fan_entity",
+            "supply_fan_speed_entity",
+            "extract_fan_speed_entity",
+            "post_heater_entity",
+        ):
             selection["integration"] = "vallox"
         schema[marker(key, **kwargs)] = selector.EntitySelector(selection)
     return vol.Schema(schema)
