@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0
+
+- Bundle the pinned `@bitosome/ha-card-ui` library instead of maintaining copied UI implementations.
+- Open Settings, Details and History in a shared native modal with consistent Back/X, safe-area sizing, route focus and scroll restoration.
+- Keep live ventilation readings on the main card. Edit response curves as child pages, retaining drafts and guarding pending saves or unsaved changes on Back, X, Escape and native-control handoff.
+- Preserve fan settings, measured RPM, heater feedback, server bindings and revision-aware curve saves.
+
 ## 0.6.3
 
 - Adopt the versioned Space Hub header, metric, telemetry, surface, action and navigation primitives; retain independent builds with verified provenance.

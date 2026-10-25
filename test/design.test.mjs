@@ -1,16 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { readFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
+import { readFileSync, existsSync } from 'node:fs';
 
-test('vendored family primitives match their pinned source manifest', () => {
-  const base = new URL('../src/shared/', import.meta.url);
-  const provenance = JSON.parse(readFileSync(new URL('DESIGN_PROVENANCE.json', base), 'utf8'));
-  assert.equal(provenance.source, 'bitosome/space-hub-card');
-  for (const [file, hash] of Object.entries(provenance.files)) {
-    const vendored = readFileSync(new URL(file, base), 'utf8');
-    assert.ok(vendored.startsWith(`// VENDORED from ${provenance.source} design ${provenance.version}. See DESIGN_PROVENANCE.json.\n`));
-    const canonical = vendored.slice(vendored.indexOf('\n') + 1);
-    assert.equal(createHash('sha256').update(canonical).digest('hex'), hash, file);
-  }
+test('family behavior is a bundled package dependency, not a vendored fork', () => {
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  const lock = JSON.parse(readFileSync(new URL('../package-lock.json', import.meta.url), 'utf8'));
+  assert.ok(pkg.dependencies['@bitosome/ha-card-ui']);
+  assert.equal(lock.packages[''].dependencies['@bitosome/ha-card-ui'], pkg.dependencies['@bitosome/ha-card-ui']);
+  for (const file of ['card-primitives.ts', 'design-tokens.ts', 'glow.ts'])
+    assert.equal(existsSync(new URL('../src/shared/' + file, import.meta.url)), false);
 });

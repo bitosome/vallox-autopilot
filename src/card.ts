@@ -1,8 +1,18 @@
 import { LitElement, html, css, nothing } from "lit";
-import { designTokens } from "./shared/design-tokens";
-import { UI_ICONS, familyStyles } from "./shared/card-primitives";
-import { buildGlow } from "./shared/glow";
+import {
+  designTokens,
+  UI_ICONS,
+  familyStyles,
+  buildGlow,
+  tileGlow,
+  actionPill,
+  notice,
+  FamilyFlowController,
+  renderFamilyDialog,
+  showEntityMoreInfo,
+} from "@bitosome/ha-card-ui";
 import { styles } from "./styles";
+import type { ResponseCurves } from "./curves";
 import "./curves";
 import "./history";
 type State = { state: string; attributes: Record<string, any> };
@@ -28,23 +38,41 @@ const validNumber = (n: any, min = 0, max = Infinity): number | null =>
   typeof n === "number" && Number.isFinite(n) && n >= min && n <= max
     ? n
     : null;
+type DialogPage = "settings" | "history" | "details" | "curve";
 export class ValloxAutopilotCard extends LitElement {
   static properties = {
     hass: { attribute: false },
     config: { state: true },
-    tab: { state: true },
     error: { state: true },
     busy: { state: true },
   };
   hass?: Hass;
   config?: { entity: string; name?: string };
-  tab = "overview";
+  private curveTitle = "Response curve";
+  private flow = new FamilyFlowController<DialogPage>(this, {
+    guard: () => this.curveEditor()?.navigationGuard(),
+    onChange: (route, previous) => {
+      if (previous === "curve" && route !== "curve")
+        this.curveEditor()?.returnToOverview();
+    },
+  });
+  get tab() {
+    return this.flow.current === "curve"
+      ? "settings"
+      : (this.flow.current ?? "overview");
+  }
+  private curveEditor() {
+    return this.renderRoot.querySelector<ResponseCurves>(
+      "vallox-response-curves",
+    );
+  }
   error = "";
   busy = false;
   static styles = [designTokens, styles];
   setConfig(config: any) {
     if (!config.entity?.startsWith("sensor."))
       throw new Error("Select the Vallox Autopilot status sensor");
+    this.flow.forceClose(false);
     this.config = config;
   }
   static getStubConfig(hass: Hass) {
@@ -95,27 +123,41 @@ export class ValloxAutopilotCard extends LitElement {
       this.busy = false;
     }
   }
-  private show(tab: string) {
-    const editor = this.renderRoot.querySelector(
-      "vallox-response-curves",
-    ) as any;
-    if (editor && !editor.canLeave()) {
-      this.error =
-        "Finish the curve edit or reload its shared version before leaving.";
-      return;
-    }
+  private show(page: DialogPage) {
     this.error = "";
-    this.tab = tab;
+    if (this.flow.active) this.flow.push(page);
+    else this.flow.open(page);
   }
   private more(entity: string | undefined) {
-    if (entity)
-      this.dispatchEvent(
-        new CustomEvent("hass-more-info", {
-          detail: { entityId: entity },
-          bubbles: true,
-          composed: true,
-        }),
-      );
+    if (entity) this.flow.handoff(() => showEntityMoreInfo(this, entity));
+  }
+  private dialog(setting: number | null, speed: number | null) {
+    const route = this.flow.current;
+    const content =
+      route === "settings" || route === "curve"
+        ? this.settings()
+        : route === "history"
+          ? html`<vallox-ventilation-history
+              .hass=${this.hass}
+              .readings=${this.attrs}
+            ></vallox-ventilation-history>`
+          : this.details(setting, speed);
+    return renderFamilyDialog(this.flow, {
+      title:
+        route === "curve"
+          ? this.curveTitle
+          : route === "history"
+            ? "History"
+            : route === "details"
+              ? "Details"
+              : "Settings",
+      content: html`<div class="modal-content">${content}</div>`,
+      footer: this.error
+        ? notice({ message: this.error, tone: "error" })
+        : undefined,
+      wide: route === "history" || route === "curve",
+      long: route === "history" || route === "curve" || route === "settings",
+    });
   }
   private badge(
     title: string,
@@ -272,6 +314,11 @@ export class ValloxAutopilotCard extends LitElement {
       ],
     ] as const;
     return html`<vallox-response-curves
+        .flowEmbedded=${true}
+        @curve-open=${(event: CustomEvent<{ title: string }>) => {
+          this.curveTitle = event.detail.title;
+          this.flow.push("curve");
+        }}
         .settings=${a.settings ?? {}}
         .readings=${a}
         .curves=${a.response_curves ?? {}}
@@ -286,50 +333,164 @@ export class ValloxAutopilotCard extends LitElement {
             { entity_id: this.config!.entity, ...detail },
           );
         }}
-      ></vallox-response-curves
-      >${groups.map(
-        ([name, keys]) =>
-          html`<details class="surface family-surface group">
-            <summary>${name}</summary>
-            ${keys.map((key) => {
-              const id = this.entity(key, "number");
-              const s = id ? this.hass?.states[id] : undefined;
-              return s
-                ? html`<label class="setting"
-                    ><span
-                      >${(s.attributes.friendly_name ?? key).replace(
-                        /^Vallox Autopilot /,
-                        "",
-                      )}</span
-                    ><span
-                      ><input
-                        type="number"
-                        aria-label=${key.replaceAll("_", " ")}
-                        .value=${s.state}
-                        min=${s.attributes.min}
-                        max=${s.attributes.max}
-                        step=${s.attributes.step}
-                        ?disabled=${this.busy}
-                        @change=${(e: Event) => {
-                          const input = e.target as HTMLInputElement;
-                          if (input.checkValidity())
-                            void this.act(key, "number", "set_value", {
-                              value: Number(input.value),
-                            });
-                          else input.value = s.state;
-                        }}
-                      /><small
-                        >${s.attributes.unit_of_measurement ?? ""}</small
-                      ></span
-                    ></label
-                  >`
-                : nothing;
-            })}
-          </details>`,
+      ></vallox-response-curves>
+      <div class="settings-overview" ?hidden=${this.flow.current === "curve"}>
+        ${groups.map(
+          ([name, keys]) =>
+            html`<details class="surface family-surface group">
+              <summary>${name}</summary>
+              ${keys.map((key) => {
+                const id = this.entity(key, "number");
+                const s = id ? this.hass?.states[id] : undefined;
+                return s
+                  ? html`<label class="setting"
+                      ><span
+                        >${(s.attributes.friendly_name ?? key).replace(
+                          /^Vallox Autopilot /,
+                          "",
+                        )}</span
+                      ><span
+                        ><input
+                          type="number"
+                          aria-label=${key.replaceAll("_", " ")}
+                          .value=${s.state}
+                          min=${s.attributes.min}
+                          max=${s.attributes.max}
+                          step=${s.attributes.step}
+                          ?disabled=${this.busy}
+                          @change=${(e: Event) => {
+                            const input = e.target as HTMLInputElement;
+                            if (input.checkValidity())
+                              void this.act(key, "number", "set_value", {
+                                value: Number(input.value),
+                              });
+                            else input.value = s.state;
+                          }}
+                        /><small
+                          >${s.attributes.unit_of_measurement ?? ""}</small
+                        ></span
+                      ></label
+                    >`
+                  : nothing;
+              })}
+            </details>`,
+        )}
+        ${actionPill({
+          label: "Native controls",
+          icon: "mdi:fan",
+          disabled: !a.bindings?.fan_entity,
+          onClick: () => this.more(a.bindings?.fan_entity),
+        })}
+        <p class="hint">
+          Shared settings save in Home Assistant. Configure sensor and occupancy
+          mappings in the integration’s options.
+        </p>
+      </div>`;
+  }
+  private overview() {
+    const a = this.attrs;
+    return html`<div class="metrics family-metrics">
+      ${this.badge(
+        "Home humidity",
+        a.home_humidity,
+        "%",
+        a.home_rag,
+        "mdi:water-percent",
+        this.entity("home_humidity", "sensor"),
+      )}${this.badge(
+        "Shower humidity",
+        a.shower_humidity,
+        "%",
+        a.shower_rag,
+        "mdi:shower-head",
+        a.bindings?.shower_humidity_entity,
+      )}${this.badge(
+        "CO₂",
+        a.co2,
+        "ppm",
+        a.co2_rag,
+        "mdi:molecule-co2",
+        a.bindings?.co2_entity,
       )}
+      <div
+        class="surface family-surface temperatures family-telemetry"
+        role="group"
+        aria-label="Air temperatures"
+      >
+        ${this.row(
+          "Outside",
+          a.outdoor_temperature,
+          "°C",
+          a.bindings?.outdoor_entity,
+          true,
+        )}${this.row(
+          "Supply air",
+          a.supply_temperature,
+          "°C",
+          a.bindings?.supply_entity,
+          true,
+        )}${this.row(
+          "Extract air",
+          a.extract_temperature,
+          "°C",
+          a.bindings?.extract_entity,
+          true,
+        )}
+      </div>
+    </div>`;
+  }
+  private details(setting: number | null, speed: number | null) {
+    const a = this.attrs;
+    return html`<section class="surface family-surface group">
+        ${this.row("Native profile", a.profile)}${this.row(
+          "Heat recovery",
+          a.cell_state,
+        )}${this.row(
+          "Sauna",
+          a.sauna_active === true
+            ? "Active"
+            : a.sauna_active === false
+              ? "Inactive"
+              : "Unavailable",
+          "",
+          a.entities?.sauna_active,
+        )}${this.row(
+          "Fan speed setting",
+          setting,
+          "%",
+          a.bindings?.fan_entity,
+        )}${this.row(
+          "Unit-reported speed",
+          speed,
+          "%",
+          a.bindings?.actual_speed_entity,
+        )}${this.row(
+          "Filter service",
+          a.bindings?.filter_entity
+            ? (this.hass?.states[a.bindings.filter_entity]?.state ??
+                "Unavailable")
+            : "Not configured",
+          "",
+          a.bindings?.filter_entity,
+        )}
+      </section>
+      <details class="surface family-surface group">
+        <summary>Recent decisions</summary>
+        ${[...(a.events ?? [])].reverse().map(
+          (e: any) =>
+            html`<div class="event">
+              <time
+                >${new Date(e.time * 1000).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}</time
+              ><span>${e.message}</span>
+            </div>`,
+        )}
+      </details>
       <p class="hint">
-        Shared settings save in Home Assistant. Configure sensor and occupancy
-        mappings in the integration’s options.
+        Vallox may increase actual speed using its own sensors. Defrost, fan
+        balance and heater protections remain under native control.
       </p>`;
   }
   protected render() {
@@ -396,259 +557,160 @@ export class ValloxAutopilotCard extends LitElement {
         !!enabled || boost,
       );
     return html`<ha-card
-      ><div class="root">
-        <header class="family-header">
-          <span class="brand family-brand">${icon("mdi:air-filter")}</span>
-          <div class="identity family-identity">
-            <h1 class="family-title">${this.config?.name ?? "Ventilation"}</h1>
-            <div class="subtitle family-subtitle" id="home-mode">
-              ${a.home === true
-                ? "At home"
-                : a.home === false
-                  ? "Away"
-                  : "Occupancy unknown"}${a.winter ? " · Winter" : ""}
+        ><div class="root">
+          <header class="family-header">
+            <span class="brand family-brand">${icon("mdi:air-filter")}</span>
+            <div class="identity family-identity">
+              <h1 class="family-title">
+                ${this.config?.name ?? "Ventilation"}
+              </h1>
+              <div class="subtitle family-subtitle" id="home-mode">
+                ${a.home === true
+                  ? "At home"
+                  : a.home === false
+                    ? "Away"
+                    : "Occupancy unknown"}${a.winter ? " · Winter" : ""}
+              </div>
+              <button
+                class="mode"
+                aria-label="Home/Away mode"
+                aria-describedby="home-mode"
+                title="Home/Away mode"
+                @click=${() =>
+                  this.more(a.bindings?.home_entity || a.entities?.home_mode)}
+              ></button>
             </div>
             <button
-              class="mode"
-              aria-label="Home/Away mode"
-              aria-describedby="home-mode"
-              title="Home/Away mode"
-              @click=${() =>
-                this.more(a.bindings?.home_entity || a.entities?.home_mode)}
-            ></button>
-          </div>
-          <button
-            class="icon-button family-icon-button"
-            aria-label="Native Vallox controls"
-            title="Native Vallox controls"
-            @click=${() => this.more(a.bindings?.fan_entity)}
-          >
-            ${icon(UI_ICONS.settings)}
-          </button>
-        </header>
-        <div class="tile-wrap">
-          <div class="glow-under" style=${glow.style}>${glow.overlay}</div>
-          <section class="surface family-surface hero">
-            <div class="speed">
-              <div class="speed-values">
-                <span class="speed-reading"
-                  ><strong class=${setting === null ? "missing" : ""}
-                    >${setting === null
-                      ? "Unavailable"
-                      : value(setting)}</strong
-                  >${setting === null ? nothing : html`<span>%</span>`}</span
-                ><span class="speed-caption" aria-live="polite"
-                  >Fan setting</span
+              class="icon-button family-icon-button"
+              aria-label="Settings"
+              title="Settings"
+              aria-haspopup="dialog"
+              aria-expanded=${String(this.flow.stack.includes("settings"))}
+              @click=${() => this.show("settings")}
+            >
+              ${icon(UI_ICONS.settings)}
+            </button>
+          </header>
+          <div class="tile-wrap">
+            ${tileGlow(glow)}
+            <section class="surface family-surface hero">
+              <div class="speed">
+                <div class="speed-values">
+                  <span class="speed-reading"
+                    ><strong class=${setting === null ? "missing" : ""}
+                      >${setting === null
+                        ? "Unavailable"
+                        : value(setting)}</strong
+                    >${setting === null ? nothing : html`<span>%</span>`}</span
+                  ><span class="speed-caption" aria-live="polite"
+                    >Fan setting</span
+                  >
+                </div>
+                <div
+                  class=${`airflow ${airflow ? "flowing" : ""}`}
+                  style=${`--airflow-duration:${airflowDuration.toFixed(1)}s`}
+                  aria-hidden="true"
                 >
+                  <span class="airflow-fan">${icon("mdi:fan")}</span>
+                </div>
               </div>
-              <div
-                class=${`airflow ${airflow ? "flowing" : ""}`}
-                style=${`--airflow-duration:${airflowDuration.toFixed(1)}s`}
-                aria-hidden="true"
-              >
-                <span class="airflow-fan">${icon("mdi:fan")}</span>
+              <div class="track">
+                <div style=${`width:${setting ?? 0}%`}></div>
               </div>
-            </div>
-            <div class="track">
-              <div style=${`width:${setting ?? 0}%`}></div>
-            </div>
-            ${this.fanTelemetry(supply, extract, heater)}
-            <div class="actions">
-              <button
-                class=${`pill family-action ${boost ? "active" : ""}`}
-                ?disabled=${this.busy ||
-                !this.entity(boost ? "cancel_boost" : "boost", "button")}
-                @click=${() =>
-                  this.act(boost ? "cancel_boost" : "boost", "button", "press")}
-              >
-                ${icon(boost ? "mdi:stop" : "mdi:fan-plus")}${boost
-                  ? "End boost"
-                  : `Boost · ${a.settings?.boost_minutes ?? 15} min`}</button
-              >${a.hold_until
-                ? html`<button
-                    class="pill family-action"
-                    ?disabled=${this.busy}
-                    @click=${() => this.act("resume", "button", "press")}
-                  >
-                    ${icon("mdi:play")}Resume auto
-                  </button>`
-                : nothing}${boost
-                ? html`<span class="hint"
-                    >Until
-                    ${new Date(a.boost_until * 1000).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}</span
-                  >`
-                : nothing}
-            </div>
-          </section>
-        </div>
-        ${a.sauna_inhibited
-          ? html`<div class="notice">
-              ${icon("mdi:heat-wave")}${a.sauna_active === true
-                ? "Controller humidity boost paused for sauna."
-                : "Sauna status unavailable; controller humidity boost paused."}
-            </div>`
-          : nothing}
-        ${a.degraded
-          ? html`<details class="notice">
-              <summary>
-                Sensor fallback · minimum ${a.settings?.home_speed ?? 30}%
-              </summary>
-              <p>
-                Some inputs cannot be used. Auto keeps at least the Home
-                airflow; higher valid demands still apply.
-              </p>
-              ${(a.input_issues ?? []).map(
-                (issue: any) =>
-                  html`<button
-                    class="data-row"
-                    @click=${() => this.more(issue.entity_id)}
-                  >
-                    <span>${issue.name}</span><b>${issue.reason}</b>
-                  </button>`,
-              )}
-            </details>`
-          : nothing}
-        ${a.notice ? html`<p class="hint">${a.notice}</p>` : nothing}${this
-          .error || a.error
-          ? html`<div role="alert" class="notice error">
-              ${this.error || a.error}
-            </div>`
-          : nothing}
-        ${this.tab === "overview"
-          ? html`<div class="metrics family-metrics">
-              ${this.badge(
-                "Home humidity",
-                a.home_humidity,
-                "%",
-                a.home_rag,
-                "mdi:water-percent",
-                this.entity("home_humidity", "sensor"),
-              )}${this.badge(
-                "Shower humidity",
-                a.shower_humidity,
-                "%",
-                a.shower_rag,
-                "mdi:shower-head",
-                a.bindings?.shower_humidity_entity,
-              )}${this.badge(
-                "CO₂",
-                a.co2,
-                "ppm",
-                a.co2_rag,
-                "mdi:molecule-co2",
-                a.bindings?.co2_entity,
-              )}
-              <div
-                class="surface family-surface temperatures family-telemetry"
-                role="group"
-                aria-label="Air temperatures"
-              >
-                ${this.row(
-                  "Outside",
-                  a.outdoor_temperature,
-                  "°C",
-                  a.bindings?.outdoor_entity,
-                  true,
-                )}${this.row(
-                  "Supply air",
-                  a.supply_temperature,
-                  "°C",
-                  a.bindings?.supply_entity,
-                  true,
-                )}${this.row(
-                  "Extract air",
-                  a.extract_temperature,
-                  "°C",
-                  a.bindings?.extract_entity,
-                  true,
-                )}
-              </div>
-            </div>`
-          : this.tab === "settings"
-            ? this.settings()
-            : this.tab === "history"
-              ? html`<vallox-ventilation-history
-                  .hass=${this.hass}
-                  .readings=${a}
-                ></vallox-ventilation-history>`
-              : html`<section class="surface family-surface group">
-                    ${this.row("Native profile", a.profile)}${this.row(
-                      "Heat recovery",
-                      a.cell_state,
-                    )}${this.row(
-                      "Sauna",
-                      a.sauna_active === true
-                        ? "Active"
-                        : a.sauna_active === false
-                          ? "Inactive"
-                          : "Unavailable",
-                      "",
-                      a.entities?.sauna_active,
-                    )}${this.row(
-                      "Fan speed setting",
-                      setting,
-                      "%",
-                      a.bindings?.fan_entity,
-                    )}${this.row(
-                      "Unit-reported speed",
-                      speed,
-                      "%",
-                      a.bindings?.actual_speed_entity,
-                    )}<button
-                      class="data-row"
-                      @click=${() => this.more(a.bindings?.filter_entity)}
+              ${this.fanTelemetry(supply, extract, heater)}
+              <div class="actions">
+                ${actionPill({
+                  label: boost
+                    ? "End boost"
+                    : `Boost · ${a.settings?.boost_minutes ?? 15} min`,
+                  icon: boost ? "mdi:stop" : "mdi:fan-plus",
+                  primary: boost,
+                  disabled:
+                    this.busy ||
+                    !this.entity(boost ? "cancel_boost" : "boost", "button"),
+                  onClick: () =>
+                    this.act(
+                      boost ? "cancel_boost" : "boost",
+                      "button",
+                      "press",
+                    ),
+                })}${a.hold_until
+                  ? html`<button
+                      class="pill family-action"
+                      ?disabled=${this.busy}
+                      @click=${() => this.act("resume", "button", "press")}
                     >
-                      <span>Filter service</span
-                      ><b
-                        >${a.bindings?.filter_entity
-                          ? (this.hass?.states[a.bindings.filter_entity]
-                              ?.state ?? "Unavailable")
-                          : "Not configured"}</b
-                      >
-                    </button>
-                  </section>
-                  <details class="surface family-surface group">
-                    <summary>Recent decisions</summary>
-                    ${[...(a.events ?? [])]
-                      .reverse()
-                      .map(
-                        (e: any) =>
-                          html`<div class="event">
-                            <time
-                              >${new Date(e.time * 1000).toLocaleTimeString(
-                                [],
-                                { hour: "2-digit", minute: "2-digit" },
-                              )}</time
-                            ><span>${e.message}</span>
-                          </div>`,
-                      )}
-                  </details>
-                  <p class="hint">
-                    Vallox may increase actual speed using its own sensors.
-                    Defrost, fan balance and heater protections remain under
-                    native control.
-                  </p>`}
-        <nav class="family-navigation" aria-label="Ventilation sections">
-          ${[
-            ["overview", "mdi:home-outline", "Overview"],
-            ["history", UI_ICONS.history, "History"],
-            ["settings", UI_ICONS.settings, "Settings"],
-            ["details", UI_ICONS.details, "Details"],
-          ].map(
-            ([key, mdi, label]) =>
-              html`<button
-                aria-current=${this.tab === key ? "page" : "false"}
-                @click=${() => this.show(key)}
-              >
-                ${icon(mdi)}${label}
-              </button>`,
-          )}
-        </nav>
-      </div></ha-card
-    >`;
+                      ${icon("mdi:play")}Resume auto
+                    </button>`
+                  : nothing}${boost
+                  ? html`<span class="hint"
+                      >Until
+                      ${new Date(a.boost_until * 1000).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}</span
+                    >`
+                  : nothing}
+              </div>
+            </section>
+          </div>
+          ${a.sauna_inhibited
+            ? html`<div class="notice">
+                ${icon("mdi:heat-wave")}${a.sauna_active === true
+                  ? "Controller humidity boost paused for sauna."
+                  : "Sauna status unavailable; controller humidity boost paused."}
+              </div>`
+            : nothing}
+          ${a.degraded
+            ? html`<details class="notice">
+                <summary>
+                  Sensor fallback · minimum ${a.settings?.home_speed ?? 30}%
+                </summary>
+                <p>
+                  Some inputs cannot be used. Auto keeps at least the Home
+                  airflow; higher valid demands still apply.
+                </p>
+                ${(a.input_issues ?? []).map(
+                  (issue: any) =>
+                    html`<button
+                      class="data-row"
+                      @click=${() => this.more(issue.entity_id)}
+                    >
+                      <span>${issue.name}</span><b>${issue.reason}</b>
+                    </button>`,
+                )}
+              </details>`
+            : nothing}
+          ${a.notice ? html`<p class="hint">${a.notice}</p>` : nothing}${this
+            .error || a.error
+            ? html`<div role="alert" class="notice error">
+                ${this.error || a.error}
+              </div>`
+            : nothing}
+          ${this.overview()}
+          <nav
+            class="family-navigation"
+            aria-label="Ventilation information"
+            style="--family-nav-columns:2"
+          >
+            ${(
+              [
+                ["history", UI_ICONS.history, "History"],
+                ["details", UI_ICONS.details, "Details"],
+              ] as const
+            ).map(
+              ([key, mdi, label]) =>
+                html`<button
+                  aria-haspopup="dialog"
+                  aria-expanded=${String(this.flow.stack.includes(key))}
+                  @click=${() => this.show(key)}
+                >
+                  ${icon(mdi)}${label}
+                </button>`,
+            )}
+          </nav>
+        </div></ha-card
+      >${this.dialog(setting, speed)}`;
   }
 }
 customElements.define("vallox-autopilot-card", ValloxAutopilotCard);

@@ -9,7 +9,7 @@ A Home Assistant integration and bundled dashboard card for gradual, configurabl
 1. Install the native Vallox integration and confirm its fan, humidity, CO₂ and temperature entities work.
 2. Add `https://github.com/bitosome/vallox-autopilot` to HACS as an **Integration**, download and restart Home Assistant.
 3. Add **Vallox Autopilot** in Settings → Devices & services. Select the native fan, dry-house humidity sensors, shower humidity, CO₂ and heat-recovery/outdoor sensors. Leave the occupancy input empty to use the integration’s shared Home mode switch (`on` = Home, `off` = Away). For sauna detection, choose heater current sensors in amperes, or an existing external sauna binary sensor. Keep shower sensors out of the dry-house group.
-4. Add the **Vallox Autopilot** dashboard card and select its Status sensor. The module registers automatically; YAML dashboards can load `/vallox_autopilot/card.js?v=0.6.3` as a JavaScript module.
+4. Add the **Vallox Autopilot** dashboard card and select its Status sensor. The module registers automatically; YAML dashboards can load `/vallox_autopilot/card.js?v=0.7.0` as a JavaScript module.
 5. Review settings before turning Auto on. New controllers start **off**.
 
 ```yaml
@@ -68,7 +68,7 @@ python3 -m http.server 8774 --bind 127.0.0.1
 # http://127.0.0.1:8774/preview/ — synthetic data, no hardware calls
 ```
 
-The controller is the only command writer; `engine.py` is pure policy, native HA platforms expose shared state, and the Lit card only calls entity services. Space Hub design tokens and glow helper are vendored with provenance; NIBE supplies the compact visual hierarchy. No runtime dependency on sibling repositories or cloud services.
+The controller is the only command writer; `engine.py` is pure policy, native HA platforms expose shared state, and the Lit card only calls entity services. The pinned `@bitosome/ha-card-ui` build-time package supplies Space Hub tokens/glow, common components and modal behavior; NIBE supplies the compact visual hierarchy. No runtime dependency on sibling repositories or cloud services.
 
 The control binding must be an enabled native `vallox` fan, and Autopilot output entities cannot be mapped back as inputs. The controller writes `fan.set_percentage` directly; core Vallox sends that setting to the unit over its local API. No legacy helper or automation is part of this write path. Requested percentage and reported operating speed remain distinct. After a successful speed command, read-only native refreshes at 5, 15 and 30 seconds reduce the normal one-minute polling delay while the fan settles. The hero shows the acknowledged native fan setting throughout this interval; it does not claim that the motors have already reached that setting. Native operating percentage and RPM readings older than 150 seconds are shown as unavailable. Atomic storage writes propagate failures before a setting is acknowledged or a physical command is dispatched; existing storage and shared settings are retained.
 

@@ -21,12 +21,12 @@ test('point editor adds and removes shared points with revision checks',async()=
 test('keyboard edits enforce neighbours and save on release, not each movement',async()=>{const{card,calls}=curveFixture();const c=await editor(card);const point=c.shadowRoot.querySelector('.point');point.dispatchEvent(new window.KeyboardEvent('keydown',{key:'ArrowRight'}));await c.updateComplete;assert.equal(calls.length,0);point.dispatchEvent(new window.KeyboardEvent('keyup',{key:'ArrowRight'}));await settled(card,c);assert.equal(calls[0][2].points[0].x,57);assert.equal(calls[0][2].points[0].y,30);card.remove()});
 test('point inputs and Away curves are independent',async()=>{const{card,calls}=curveFixture();const c=await editor(card);button(c,'Away').click();await c.updateComplete;const input=c.shadowRoot.querySelector('input[aria-label="Point fan speed"]');input.value='20';input.dispatchEvent(new Event('change'));await settled(card,c);assert.equal(calls[0][2].profile,'away');assert.equal(calls[0][2].points[0].y,20);assert.equal(card.hass.states['sensor.test'].attributes.response_curves.home.home[0].y,30);card.remove()});
 test('save failure retains draft and reload takes latest shared curve',async()=>{const{card}=curveFixture();const c=await editor(card);card.hass.callService=async()=>{throw Error('Curve changed elsewhere')};button(c,'Add point').click();await settled(card,c);assert.equal(c.shadowRoot.querySelectorAll('.point').length,3);assert.match(c.shadowRoot.querySelector('[role=alert]').textContent,/changed elsewhere/);assert.match(c.shadowRoot.textContent,/Not saved/);button(c,'Reload shared curve').click();await c.updateComplete;assert.equal(c.shadowRoot.querySelectorAll('.point').length,2);card.remove()});
-test('winter explains shifted activation without moving editable normal coordinates',async()=>{const{card}=curveFixture();card.hass.states['sensor.test'].attributes.winter=true;const c=await editor(card);assert.match(c.shadowRoot.textContent,/5 points earlier/);assert.equal(c.shadowRoot.querySelector('input[aria-label="Point input"]').value,'56');button(c,'Back to response curves').click();await c.updateComplete;button(c,'CO₂').click();await c.updateComplete;assert.doesNotMatch(c.shadowRoot.textContent,/points earlier/);card.remove()});
+test('winter explains shifted activation without moving editable normal coordinates',async()=>{const{card}=curveFixture();card.hass.states['sensor.test'].attributes.winter=true;const c=await editor(card);assert.match(c.shadowRoot.textContent,/5 points earlier/);assert.equal(c.shadowRoot.querySelector('input[aria-label="Point input"]').value,'56');card.shadowRoot.querySelector('dialog [aria-label=Back]').click();await settled(card,c);button(c,'CO₂').click();await c.updateComplete;assert.doesNotMatch(c.shadowRoot.textContent,/points earlier/);card.remove()});
 test('unknown sauna and faulty input are explained separately',async()=>{const{card}=fixture();Object.assign(card.hass.states['sensor.test'].attributes,{sauna_inhibited:true,sauna_active:null,degraded:true,input_issues:[{entity_id:'sensor.current',name:'Sauna phase 1',reason:'Unavailable'}]});await card.updateComplete;assert.match(card.shadowRoot.textContent,/Sauna status unavailable/);assert.doesNotMatch(card.shadowRoot.textContent,/paused for sauna\./);assert.match(card.shadowRoot.textContent,/Sauna phase 1/);assert.match(card.shadowRoot.textContent,/Sensor fallback/);card.remove()});
 
-test('header opens fan controls while setting stays read-only and telemetry drives decorative speed',async()=>{const{card}=fixture();card.hass.states['sensor.test'].attributes.bindings.actual_speed_entity='sensor.report';card.hass.states['sensor.report']={state:'50',attributes:{}};await card.updateComplete;assert.equal(card.shadowRoot.querySelector('.speed-reading strong').textContent,'36');assert.equal(card.shadowRoot.querySelector('.airflow').style.getPropertyValue('--airflow-duration'),'2.4s');let id;card.addEventListener('hass-more-info',e=>id=e.detail.entityId);assert.equal(card.shadowRoot.querySelector('.speed-values').tagName,'DIV');const controls=card.shadowRoot.querySelector('[aria-label="Native Vallox controls"]');assert.equal(controls.querySelector('ha-icon').getAttribute('icon'),'mdi:cog-outline');controls.click();assert.equal(id,'fan.native');card.hass={...card.hass,states:{...card.hass.states,'sensor.report':{state:'unavailable',attributes:{}}}};await card.updateComplete;assert.equal(card.shadowRoot.querySelector('.speed-reading strong').textContent,'36');assert.equal(card.shadowRoot.querySelector('.flowing'),null);card.remove()});
+test('header opens settings and hands native controls back to HA while telemetry drives decorative speed',async()=>{const{card}=fixture();card.hass.states['sensor.test'].attributes.bindings.actual_speed_entity='sensor.report';card.hass.states['sensor.report']={state:'50',attributes:{}};await card.updateComplete;assert.equal(card.shadowRoot.querySelector('.speed-reading strong').textContent,'36');assert.equal(card.shadowRoot.querySelector('.airflow').style.getPropertyValue('--airflow-duration'),'2.4s');let id;card.addEventListener('hass-more-info',e=>id=e.detail.entityId);assert.equal(card.shadowRoot.querySelector('.speed-values').tagName,'DIV');const controls=card.shadowRoot.querySelector('header [aria-label="Settings"]');assert.equal(controls.querySelector('ha-icon').getAttribute('icon'),'mdi:cog-outline');controls.click();await card.updateComplete;assert.equal(id,undefined);assert.ok(card.shadowRoot.querySelector('dialog').open);button(card,'Native controls').click();await card.updateComplete;assert.equal(id,'fan.native');assert.equal(card.shadowRoot.querySelector('dialog'),null);card.hass={...card.hass,states:{...card.hass.states,'sensor.report':{state:'unavailable',attributes:{}}}};await card.updateComplete;assert.equal(card.shadowRoot.querySelector('.speed-reading strong').textContent,'36');assert.equal(card.shadowRoot.querySelector('.flowing'),null);card.remove()});
 
-test('curve summaries are compact and navigation preserves a failed edit',async()=>{const{card}=curveFixture();await card.updateComplete;button(card,'Settings').click();await card.updateComplete;const c=card.shadowRoot.querySelector('vallox-response-curves');await c.updateComplete;assert.equal(c.shadowRoot.querySelectorAll('.curve-summary').length,4);assert.equal(c.shadowRoot.querySelector('.graph'),null);button(c,'Home humidity').click();await c.updateComplete;card.hass.callService=async()=>{throw Error('Offline')};button(c,'Add point').click();await settled(card,c);button(card,'History').click();await card.updateComplete;assert.equal(card.tab,'settings');assert.match(card.shadowRoot.textContent,/Finish the curve edit/);button(c,'Reload shared curve').click();await c.updateComplete;button(card,'History').click();await card.updateComplete;assert.equal(card.tab,'history');card.remove()});
+test('curve summaries are compact and navigation preserves a failed edit',async()=>{const{card}=curveFixture();await card.updateComplete;button(card,'Settings').click();await card.updateComplete;const c=card.shadowRoot.querySelector('vallox-response-curves');await c.updateComplete;assert.equal(c.shadowRoot.querySelectorAll('.curve-summary').length,4);assert.equal(c.shadowRoot.querySelector('.graph'),null);button(c,'Home humidity').click();await c.updateComplete;card.hass.callService=async()=>{throw Error('Offline')};button(c,'Add point').click();await settled(card,c);button(card,'History').click();await card.updateComplete;assert.equal(card.tab,'settings');assert.match(card.shadowRoot.textContent,/Discard unsaved curve changes/);button(card,'Keep editing').click();await card.updateComplete;button(c,'Reload shared curve').click();await c.updateComplete;button(card,'History').click();await card.updateComplete;assert.equal(card.tab,'history');card.remove()});
 
 test('history uses native cards with configured entities and selected period',async()=>{const configs=[];window.loadCardHelpers=async()=>({createCardElement(config){configs.push(config);return document.createElement('div')}});const{card}=fixture();Object.assign(card.hass.states['sensor.test'].attributes.entities,{fan_setting:'sensor.renamed_speed'});Object.assign(card.hass.states['sensor.test'].attributes.bindings,{co2_entity:'sensor.renamed_co2'});card.hass.states['sensor.renamed_speed']={state:'32',attributes:{}};card.hass.states['sensor.renamed_co2']={state:'800',attributes:{}};await card.updateComplete;button(card,'History').click();await card.updateComplete;const h=card.shadowRoot.querySelector('vallox-ventilation-history');await settled(card,h);assert.equal(h.shadowRoot.querySelector('select').value,'24');assert.deepEqual(configs[0],{type:'history-graph',hours_to_show:24,entities:[{entity:'sensor.renamed_speed',name:'Fan setting'}]});button(h,'CO₂').click();await settled(card,h);assert.equal(configs.at(-1).entities[0].entity,'sensor.renamed_co2');const select=h.shadowRoot.querySelector('select');select.value='72';select.dispatchEvent(new Event('change'));await settled(card,h);assert.equal(configs.at(-1).hours_to_show,72);assert.equal(h.chart.hass,card.hass);card.remove();delete window.loadCardHelpers});
 
@@ -65,4 +65,85 @@ test('mapped metrics keep native more-info and passive details are not buttons',
   assert.equal(profile.tagName,'DIV');
   assert.equal(calls.length,0);
   card.remove();
+});
+
+test('settings modal and curve child share one dialog and retain the live overview', async () => {
+  const { card, calls } = curveFixture(); await card.updateComplete;
+  const hero = card.shadowRoot.querySelector('.hero');
+  const opener = card.shadowRoot.querySelector('header [aria-label="Settings"]');
+  opener.focus(); opener.click(); await card.updateComplete;
+  const dialog = card.shadowRoot.querySelector('dialog');
+  const curves = card.shadowRoot.querySelector('vallox-response-curves'); await curves.updateComplete;
+  assert.equal(dialog.open, true);
+  assert.equal(dialog.getAttribute('aria-label'), 'Settings');
+  button(curves, 'Home humidity').click(); await settled(card, curves);
+  assert.equal(card.shadowRoot.querySelector('dialog'), dialog);
+  assert.equal(card.shadowRoot.querySelector('vallox-response-curves'), curves);
+  assert.equal(dialog.getAttribute('aria-label'), 'Home humidity');
+  assert.equal(curves.shadowRoot.querySelector('[aria-label="Back to response curves"]'), null);
+  card.shadowRoot.querySelector('dialog [aria-label="Back"]').click(); await settled(card, curves);
+  assert.equal(dialog.getAttribute('aria-label'), 'Settings');
+  assert.equal(curves.editing, false);
+  assert.equal(card.shadowRoot.querySelector('.hero'), hero);
+  card.shadowRoot.querySelector('dialog [aria-label="Close Settings"]').click(); await card.updateComplete;
+  assert.equal(card.shadowRoot.querySelector('dialog'), null);
+  assert.equal(card.shadowRoot.activeElement, opener);
+  assert.deepEqual(calls, []); card.remove();
+});
+
+test('failed curve draft survives Escape and Back until shared discard is confirmed', async () => {
+  const { card } = curveFixture(); const curves = await editor(card);
+  card.hass.callService = async () => { throw Error('Offline'); };
+  button(curves, 'Add point').click(); await settled(card, curves);
+  const draft = structuredClone(curves.draft);
+  const dialog = card.shadowRoot.querySelector('dialog');
+  dialog.dispatchEvent(new Event('cancel', { cancelable: true })); await card.updateComplete;
+  assert.ok(dialog.open); assert.deepEqual(curves.draft, draft);
+  assert.ok(card.shadowRoot.querySelector('[aria-label="Unsaved changes"]'));
+  dialog.dispatchEvent(new Event('cancel', { cancelable: true })); await card.updateComplete;
+  assert.equal(card.shadowRoot.querySelector('[aria-label="Unsaved changes"]'), null);
+  assert.deepEqual(curves.draft, draft);
+  card.shadowRoot.querySelector('dialog [aria-label="Back"]').click(); await card.updateComplete;
+  button(card, 'Discard changes').click(); await settled(card, curves);
+  assert.equal(dialog.getAttribute('aria-label'), 'Settings');
+  assert.equal(curves.draft, null); assert.equal(curves.editing, false);
+  assert.equal(curves.shadowRoot.querySelectorAll('.curve-summary').length, 4);
+  card.remove();
+});
+
+test('pending curve saves and revision acknowledgement block dismissal without discarding data', async () => {
+  const { card } = curveFixture(); const curves = await editor(card);
+  let finish; card.hass.callService = () => new Promise(resolve => { finish = resolve; });
+  button(curves, 'Add point').click(); await settled(card, curves);
+  const dialog = card.shadowRoot.querySelector('dialog');
+  card.shadowRoot.querySelector('dialog [aria-label="Close Home humidity"]').click(); await card.updateComplete;
+  assert.ok(dialog.open); assert.ok(curves.draft); assert.equal(curves.saving, true);
+  assert.match(dialog.textContent, /Wait for the curve edit/);
+  finish(); await settled(card, curves);
+  assert.notEqual(curves.pendingRevision, null);
+  dialog.dispatchEvent(new Event('cancel', { cancelable: true })); await card.updateComplete;
+  assert.ok(dialog.open); assert.ok(curves.draft);
+  const a = card.hass.states['sensor.test'].attributes;
+  a.response_curves.home.home = structuredClone(curves.draft);
+  a.curve_revisions['home:home'] = 1;
+  card.hass = { ...card.hass }; await settled(card, curves);
+  assert.equal(curves.pendingRevision, null); assert.equal(curves.draft, null);
+  dialog.dispatchEvent(new Event('cancel', { cancelable: true })); await card.updateComplete;
+  assert.equal(card.shadowRoot.querySelector('dialog'), null); card.remove();
+});
+
+test('native handoff waits for dirty curve confirmation and dismissal sends no device command', async () => {
+  const { card, calls } = curveFixture(); const curves = await editor(card);
+  card.hass.callService = async () => { throw Error('Offline'); };
+  button(curves, 'Add point').click(); await settled(card, curves);
+  let entity;
+  card.addEventListener('hass-more-info', e => {
+    assert.equal(card.shadowRoot.querySelector('dialog').open, false);
+    entity = e.detail.entityId;
+  });
+  card.more('fan.native'); await card.updateComplete;
+  assert.equal(entity, undefined); assert.ok(curves.draft);
+  button(card, 'Discard changes').click(); await card.updateComplete;
+  assert.equal(entity, 'fan.native'); assert.equal(card.shadowRoot.querySelector('dialog'), null);
+  assert.equal(calls.length, 0); card.remove();
 });

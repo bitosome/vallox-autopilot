@@ -1,5 +1,5 @@
 import { LitElement, html, svg, css, nothing, type PropertyValues } from "lit";
-import { UI_ICONS } from "./shared/card-primitives";
+import { UI_ICONS } from "@bitosome/ha-card-ui";
 import { styles } from "./styles";
 
 const definitions = {
@@ -50,6 +50,7 @@ const copy = (p: Point[]) => p.map((p) => ({ ...p }));
 
 export class ResponseCurves extends LitElement {
   static properties = {
+    flowEmbedded: { type: Boolean },
     settings: { attribute: false },
     readings: { attribute: false },
     curves: { attribute: false },
@@ -68,6 +69,7 @@ export class ResponseCurves extends LitElement {
     editing: { state: true },
     compare: { state: true },
   };
+  flowEmbedded = false;
   settings: Record<string, number> = {};
   readings: Record<string, number | null> = {};
   curves: Curves = {};
@@ -92,6 +94,24 @@ export class ResponseCurves extends LitElement {
       !this.draft && !this.saving && this.pendingRevision === null && !this.drag
     );
   }
+  navigationGuard() {
+    return {
+      pending: this.saving || this.pendingRevision !== null || !!this.drag,
+      dirty: !!this.draft,
+      message:
+        this.saving || this.pendingRevision !== null || !!this.drag
+          ? "Wait for the curve edit to finish and Home Assistant to confirm it."
+          : "Discard unsaved curve changes?",
+      discard: () => {
+        this.draft = null;
+        this.error = "";
+      },
+    };
+  }
+  returnToOverview() {
+    this.editing = false;
+    this.viewport = null;
+  }
   private reading(key: CurveKey) {
     const d = definitions[key];
     return key === "excess"
@@ -114,6 +134,14 @@ export class ResponseCurves extends LitElement {
     this.select(key, this.profile);
     this.editing = true;
     this.viewport = null;
+    if (this.flowEmbedded)
+      this.dispatchEvent(
+        new CustomEvent("curve-open", {
+          detail: { title: definitions[key].label },
+          bubbles: true,
+          composed: true,
+        }),
+      );
   }
   private back() {
     if (!this.canLeave()) {
@@ -864,13 +892,18 @@ export class ResponseCurves extends LitElement {
       b = this.limits(this.pointIndex);
     return html`<section class="surface family-surface curve-panel">
       <div class="curve-title">
-        <button
-          class="icon-button family-icon-button"
-          aria-label="Back to response curves"
-          @click=${this.back}
-        >
-          <ha-icon aria-hidden="true" icon=${UI_ICONS.back}></ha-icon></button
-        ><span>${d.label}<small>Response curve</small></span
+        ${!this.flowEmbedded
+          ? html`<button
+              class="icon-button family-icon-button"
+              aria-label="Back to response curves"
+              @click=${this.back}
+            >
+              <ha-icon aria-hidden="true" icon=${UI_ICONS.back}></ha-icon>
+            </button>`
+          : nothing}<span
+          >${this.flowEmbedded ? "Response curve" : d.label}${this.flowEmbedded
+            ? nothing
+            : html`<small>Response curve</small>`}</span
         ><button
           class="pill family-action fit"
           @click=${() => {

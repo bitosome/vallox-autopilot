@@ -1,6 +1,6 @@
 import '../custom_components/vallox_autopilot/www/vallox-autopilot-card.js';
-const icons=await(await fetch('./icons.json')).json();
-customElements.define('ha-icon',class extends HTMLElement{connectedCallback(){const path=icons[this.getAttribute('icon')];this.innerHTML=path?`<svg viewBox="0 0 24 24" width="100%" height="100%" fill="currentColor" aria-hidden="true"><path d="${path}"></path></svg>`:''}});
+const icons=await(await fetch('./icons.json', {cache:'no-store'})).json();
+customElements.define('ha-icon',class extends HTMLElement{set icon(value){this._icon=value;if(this.isConnected)this.render()}get icon(){return this._icon}connectedCallback(){this.render()}render(){const path=icons[this.icon??this.getAttribute('icon')];this.innerHTML=path?`<svg viewBox="0 0 24 24" width="100%" height="100%" fill="currentColor" aria-hidden="true"><path d="${path}"></path></svg>`:''}});
 const card=document.querySelector('vallox-autopilot-card');card.setConfig({entity:'sensor.ventilation'});
 let enabled=true;
 const savedCurves={}, revisions={};
