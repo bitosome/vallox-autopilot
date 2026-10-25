@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.3
+
+- Adopt the versioned Space Hub header, metric, telemetry, surface, action and navigation primitives; retain independent builds with verified provenance.
+- Align settings/history/details icons, mobile touch targets and number-field sizing with the common card guide.
+- Show unavailable readings with neutral status and omit dead controls for unbound data. Preserve native fan settings, measured RPM, heater state and shared curve behavior.
+- Format maintained presentation sources and enforce formatting in checks.
+
 ## 0.5.5
 
 - Match the heat-pump header padding, subtitle spacing and centered icon alignment while preserving a full-size Home/Away touch target.

@@ -1,13 +1,15 @@
 {
   "name": "vallox-autopilot",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "type": "module",
   "license": "MIT",
   "scripts": {
     "build": "rollup -c",
     "typecheck": "tsc --noEmit",
     "test": "node --test test/*.test.mjs",
-    "check": "npm run typecheck && npm run build && npm test"
+    "check": "npm run format:check && npm run typecheck && npm run build && npm test",
+    "format": "prettier --write src/card.ts src/styles.ts src/curves.ts src/history.ts",
+    "format:check": "prettier --check src/card.ts src/styles.ts src/curves.ts src/history.ts"
   },
   "dependencies": {
     "lit": "^3.3.1"
@@ -19,6 +21,7 @@
     "@rollup/plugin-terser": "^1.0.2",
     "@rollup/plugin-typescript": "^12.1.4",
     "happy-dom": "^20.10.6",
+    "prettier": "3.6.2",
     "rollup": "^4.44.1",
     "tslib": "^2.8.1",
     "typescript": "^5.8.3"
