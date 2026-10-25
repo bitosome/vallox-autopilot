@@ -156,7 +156,7 @@ export class ValloxAutopilotCard extends LitElement {
         ? notice({ message: this.error, tone: "error" })
         : undefined,
       wide: route === "history" || route === "curve",
-      long: route === "history" || route === "curve" || route === "settings",
+      long: route === "history" || route === "curve",
     });
   }
   private badge(

@@ -1705,7 +1705,7 @@ const _=globalThis,k=t=>t,A=_.trustedTypes,S=A?A.createPolicy("lit-html",{create
     role=${"error"===r.tone?"alert":"status"}
   >
     <span>${r.message}</span>${r.action?Ht(r.action):G}
-  </div>`):void 0,wide:"history"===i||"curve"===i,long:"history"===i||"curve"===i||"settings"===i});var r}badge(t,e,i,s,r,a){const o=!["unknown","unavailable"].includes(this.state?.state??"unavailable")&&"number"==typeof e&&Number.isFinite(e),n=o&&["red","amber","green"].includes(s)?s:"unknown",l=o?qt(e):"Unavailable",c=`${t}: ${l}${o?` ${i}; ${"red"===n?"Needs attention":"amber"===n?"Watch":"green"===n?"In range":"Unavailable"}`:""}`,d=F`<span class="metric-top family-metric-top">
+  </div>`):void 0,wide:"history"===i||"curve"===i,long:"history"===i||"curve"===i});var r}badge(t,e,i,s,r,a){const o=!["unknown","unavailable"].includes(this.state?.state??"unavailable")&&"number"==typeof e&&Number.isFinite(e),n=o&&["red","amber","green"].includes(s)?s:"unknown",l=o?qt(e):"Unavailable",c=`${t}: ${l}${o?` ${i}; ${"red"===n?"Needs attention":"amber"===n?"Watch":"green"===n?"In range":"Unavailable"}`:""}`,d=F`<span class="metric-top family-metric-top">
         ${Bt(r)}<span class="metric-label family-metric-label"
           >${t}</span
         >

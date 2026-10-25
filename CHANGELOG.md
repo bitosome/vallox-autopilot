@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1
+
+- Let Settings size to its content while retaining a bounded scrollable body. Keep dedicated height for charts and curve editing.
+
 ## 0.7.0
 
 - Bundle the pinned `@bitosome/ha-card-ui` library instead of maintaining copied UI implementations.

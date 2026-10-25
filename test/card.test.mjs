@@ -76,14 +76,17 @@ test('settings modal and curve child share one dialog and retain the live overvi
   const curves = card.shadowRoot.querySelector('vallox-response-curves'); await curves.updateComplete;
   assert.equal(dialog.open, true);
   assert.equal(dialog.getAttribute('aria-label'), 'Settings');
+  assert.equal(dialog.classList.contains('long'), false);
   button(curves, 'Home humidity').click(); await settled(card, curves);
   assert.equal(card.shadowRoot.querySelector('dialog'), dialog);
   assert.equal(card.shadowRoot.querySelector('vallox-response-curves'), curves);
   assert.equal(dialog.getAttribute('aria-label'), 'Home humidity');
+  assert.equal(dialog.classList.contains('long'), true);
   assert.equal(curves.shadowRoot.querySelector('[aria-label="Back to response curves"]'), null);
   card.shadowRoot.querySelector('dialog [aria-label="Back"]').click(); await settled(card, curves);
   assert.equal(dialog.getAttribute('aria-label'), 'Settings');
   assert.equal(curves.editing, false);
+  assert.equal(dialog.classList.contains('long'), false);
   assert.equal(card.shadowRoot.querySelector('.hero'), hero);
   card.shadowRoot.querySelector('dialog [aria-label="Close Settings"]').click(); await card.updateComplete;
   assert.equal(card.shadowRoot.querySelector('dialog'), null);
