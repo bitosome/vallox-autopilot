@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.2
+
+- Open Airflow, Sauna and Winter & timing as shallow Settings child pages with visible number fields and explicit per-setting Save actions.
+- Keep typed drafts through telemetry and failed requests. Validate bounds, detect external changes, and wait for Home Assistant readback before reporting a save; never write on blur.
+- Guard Back/X while a request is pending or a draft is unsaved, with a bounded confirmation timeout that retains the draft.
+- Correct modal-launcher semantics and restore touch focus to the clicked opener. Keep 44px controls and bounded, compact settings at mobile and landscape sizes.
+- Preserve ventilation algorithms, entity contracts, response curves and native protection controls.
+
 ## 0.7.1
 
 - Let Settings size to its content while retaining a bounded scrollable body. Keep dedicated height for charts and curve editing.

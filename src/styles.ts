@@ -309,33 +309,60 @@ export const styles = [
       font-size: 13px;
       font-weight: 600;
     }
-    .setting {
-      display: flex;
+    .settings-link {
+      display: grid;
+      grid-template-columns: 22px minmax(0, 1fr) 22px;
       align-items: center;
-      justify-content: space-between;
       gap: 12px;
       min-height: 56px;
-      font-size: 12px;
-      border-top: 1px solid var(--divider-color, #0001);
+      padding: 14px 16px;
+      text-align: left;
     }
-    .setting > span:last-child {
+    .settings-fields {
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+    }
+    .setting-field {
+      display: grid;
+      gap: 12px;
+      padding: 16px;
+      min-width: 0;
+    }
+    .setting-field > label {
+      font-size: 14px;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+    .setting-controls {
       display: flex;
       align-items: center;
-      gap: 5px;
-      flex-shrink: 0;
+      flex-wrap: wrap;
+      gap: 12px;
     }
-    .setting input {
-      font-size: 16px;
-      width: 76px;
+    .setting-input-unit {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1 1 112px;
+      min-width: 0;
+    }
+    .setting-input-unit input {
+      width: 100%;
+      min-width: 64px;
       min-height: 44px;
+      font-size: 16px;
       border: 1px solid var(--divider-color, #0002);
       border-radius: 10px;
-      padding: 8px;
+      padding: 8px 12px;
       background: var(--surface);
     }
-    .setting small {
+    .setting-input-unit small {
       color: var(--muted);
-      min-width: 28px;
+      flex: 0 0 auto;
+    }
+    .setting-field .family-action {
+      flex: 0 0 auto;
     }
     .event {
       display: flex;

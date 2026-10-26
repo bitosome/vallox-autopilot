@@ -38,7 +38,43 @@ const validNumber = (n: any, min = 0, max = Infinity): number | null =>
   typeof n === "number" && Number.isFinite(n) && n >= min && n <= max
     ? n
     : null;
-type DialogPage = "settings" | "history" | "details" | "curve";
+const settingGroups = {
+  airflow: {
+    label: "Airflow",
+    keys: ["home_speed", "away_speed", "boost_speed", "boost_minutes"],
+  },
+  sauna: {
+    label: "Sauna",
+    keys: ["sauna_current_threshold", "sauna_on_seconds", "sauna_off_minutes"],
+  },
+  timing: {
+    label: "Winter & timing",
+    keys: [
+      "winter_below",
+      "winter_rh_reduction",
+      "ramp_up",
+      "ramp_down",
+      "release_minutes",
+      "override_minutes",
+      "stale_minutes",
+    ],
+  },
+} as const;
+type SettingGroup = keyof typeof settingGroups;
+type DialogPage =
+  | "settings"
+  | "history"
+  | "details"
+  | "curve"
+  | `group:${SettingGroup}`;
+type NumberDraft = { entity: string; base: string; value: string };
+type SettingRequest = {
+  key: string;
+  entity: string;
+  value: number;
+  accepted: boolean;
+  timer?: ReturnType<typeof setTimeout>;
+};
 export class ValloxAutopilotCard extends LitElement {
   static properties = {
     hass: { attribute: false },
@@ -49,15 +85,37 @@ export class ValloxAutopilotCard extends LitElement {
   hass?: Hass;
   config?: { entity: string; name?: string };
   private curveTitle = "Response curve";
+  private numberDrafts: Record<string, NumberDraft> = {};
+  private settingRequest?: SettingRequest;
+  private settingsGeneration = 0;
   private flow = new FamilyFlowController<DialogPage>(this, {
-    guard: () => this.curveEditor()?.navigationGuard(),
+    guard: () => {
+      if (this.settingRequest)
+        return {
+          pending: true,
+          message: "Wait for the setting to be confirmed before leaving.",
+        };
+      if (Object.values(this.numberDrafts).some((draft) => this.isDirty(draft)))
+        return {
+          dirty: true,
+          message:
+            "Discard unsaved settings? Saved values stay in Home Assistant.",
+          discard: () => {
+            this.numberDrafts = {};
+          },
+        };
+      return this.curveEditor()?.navigationGuard();
+    },
     onChange: (route, previous) => {
       if (previous === "curve" && route !== "curve")
         this.curveEditor()?.returnToOverview();
+      if (previous?.startsWith("group:") && route !== previous)
+        this.numberDrafts = {};
     },
   });
   get tab() {
-    return this.flow.current === "curve"
+    return this.flow.current === "curve" ||
+      this.flow.current?.startsWith("group:")
       ? "settings"
       : (this.flow.current ?? "overview");
   }
@@ -72,8 +130,190 @@ export class ValloxAutopilotCard extends LitElement {
   setConfig(config: any) {
     if (!config.entity?.startsWith("sensor."))
       throw new Error("Select the Vallox Autopilot status sensor");
+    this.settingsGeneration++;
+    this.clearSettingRequest();
+    this.numberDrafts = {};
+    this.error = "";
     this.flow.forceClose(false);
     this.config = config;
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this.settingsGeneration++;
+    this.clearSettingRequest();
+  }
+  protected updated() {
+    this.acknowledgeSetting();
+    // Only untouched fields follow live telemetry. Typed drafts are user-owned.
+    let refreshed = false;
+    for (const [key, draft] of Object.entries(this.numberDrafts)) {
+      const meta = this.numberMeta(key);
+      if (
+        !this.isDirty(draft) &&
+        meta &&
+        meta.entity === draft.entity &&
+        meta.state.state !== draft.base &&
+        this.settingRequest?.key !== key
+      ) {
+        this.numberDrafts[key] = {
+          entity: draft.entity,
+          base: meta.state.state,
+          value: meta.state.state,
+        };
+        refreshed = true;
+      }
+    }
+    if (refreshed) this.requestUpdate();
+  }
+  private clearSettingRequest() {
+    if (this.settingRequest?.timer) clearTimeout(this.settingRequest.timer);
+    if (this.settingRequest) this.flow.notice = "";
+    this.settingRequest = undefined;
+    this.busy = false;
+  }
+  private isDirty(draft: NumberDraft) {
+    if (draft.value === draft.base) return false;
+    return (
+      draft.value.trim() === "" || Number(draft.value) !== Number(draft.base)
+    );
+  }
+  private numberMeta(key: string) {
+    const entity = this.entity(key, "number");
+    const state = entity ? this.hass?.states[entity] : undefined;
+    if (!entity || !state) return undefined;
+    const min = state.attributes.min,
+      max = state.attributes.max,
+      step = state.attributes.step;
+    const available =
+      state.state.trim() !== "" &&
+      Number.isFinite(Number(state.state)) &&
+      typeof min === "number" &&
+      Number.isFinite(min) &&
+      typeof max === "number" &&
+      Number.isFinite(max) &&
+      min <= max &&
+      typeof step === "number" &&
+      Number.isFinite(step) &&
+      step > 0;
+    return {
+      entity,
+      state,
+      min,
+      max,
+      step,
+      available,
+      label: String(
+        state.attributes.friendly_name ?? key.replaceAll("_", " "),
+      ).replace(/^Vallox Autopilot /, ""),
+      unit: String(state.attributes.unit_of_measurement ?? ""),
+    };
+  }
+  private openGroup(group: SettingGroup) {
+    if (this.busy || !this.flow.push(`group:${group}`)) return;
+    this.error = "";
+    this.numberDrafts = {};
+    for (const key of settingGroups[group].keys) {
+      const meta = this.numberMeta(key);
+      if (meta)
+        this.numberDrafts[key] = {
+          entity: meta.entity,
+          base: meta.state.state,
+          value: meta.state.state,
+        };
+    }
+  }
+  private reloadNumber(key: string) {
+    const meta = this.numberMeta(key);
+    if (!meta || this.busy) return;
+    this.numberDrafts[key] = {
+      entity: meta.entity,
+      base: meta.state.state,
+      value: meta.state.state,
+    };
+    this.error = "";
+    this.requestUpdate();
+  }
+  private async saveNumber(key: string) {
+    const draft = this.numberDrafts[key],
+      meta = this.numberMeta(key);
+    if (this.busy || !draft || !this.isDirty(draft)) return;
+    if (!meta?.available || meta.entity !== draft.entity) {
+      this.error =
+        "This setting is unavailable or its mapping changed. Reload its current value before saving.";
+      return;
+    }
+    if (Number(meta.state.state) !== Number(draft.base)) {
+      this.error = `${meta.label} changed elsewhere. Reload its current value before saving.`;
+      return;
+    }
+    const next = Number(draft.value),
+      steps = (next - meta.min) / meta.step;
+    if (
+      !draft.value.trim() ||
+      !Number.isFinite(next) ||
+      next < meta.min ||
+      next > meta.max ||
+      Math.abs(steps - Math.round(steps)) > 1e-6
+    ) {
+      this.error = `Enter a value from ${meta.min} to ${meta.max}, in steps of ${meta.step}.`;
+      return;
+    }
+    const generation = this.settingsGeneration;
+    const request: SettingRequest = {
+      key,
+      entity: meta.entity,
+      value: next,
+      accepted: false,
+    };
+    this.settingRequest = request;
+    this.busy = true;
+    this.error = "";
+    request.timer = setTimeout(() => {
+      if (this.settingRequest !== request) return;
+      this.clearSettingRequest();
+      this.error =
+        "No confirmation received. Your draft is kept; check the current value before retrying.";
+    }, 15000);
+    try {
+      await this.hass!.callService("number", "set_value", {
+        entity_id: request.entity,
+        value: next,
+      });
+      if (
+        generation !== this.settingsGeneration ||
+        this.settingRequest !== request
+      )
+        return;
+      request.accepted = true;
+      this.acknowledgeSetting();
+      this.requestUpdate();
+    } catch (error) {
+      if (
+        generation !== this.settingsGeneration ||
+        this.settingRequest !== request
+      )
+        return;
+      this.clearSettingRequest();
+      this.error = error instanceof Error ? error.message : String(error);
+    }
+  }
+  private acknowledgeSetting() {
+    const request = this.settingRequest;
+    if (!request?.accepted) return;
+    const meta = this.numberMeta(request.key);
+    if (
+      !meta?.available ||
+      meta.entity !== request.entity ||
+      Math.abs(Number(meta.state.state) - request.value) > 1e-6
+    )
+      return;
+    this.numberDrafts[request.key] = {
+      entity: request.entity,
+      base: meta.state.state,
+      value: meta.state.state,
+    };
+    this.clearSettingRequest();
+    this.requestUpdate();
   }
   static getStubConfig(hass: Hass) {
     return {
@@ -123,18 +363,23 @@ export class ValloxAutopilotCard extends LitElement {
       this.busy = false;
     }
   }
-  private show(page: DialogPage) {
-    this.error = "";
-    if (this.flow.active) this.flow.push(page);
-    else this.flow.open(page);
+  private show(page: DialogPage, opener?: HTMLElement) {
+    const opened = this.flow.active
+      ? this.flow.push(page)
+      : this.flow.open(page, opener);
+    if (opened) this.error = "";
   }
   private more(entity: string | undefined) {
     if (entity) this.flow.handoff(() => showEntityMoreInfo(this, entity));
   }
   private dialog(setting: number | null, speed: number | null) {
     const route = this.flow.current;
-    const content =
-      route === "settings" || route === "curve"
+    const group = route?.startsWith("group:")
+      ? (route.slice(6) as SettingGroup)
+      : undefined;
+    const content = group
+      ? this.settingsGroup(group)
+      : route === "settings" || route === "curve"
         ? this.settings()
         : route === "history"
           ? html`<vallox-ventilation-history
@@ -143,8 +388,9 @@ export class ValloxAutopilotCard extends LitElement {
             ></vallox-ventilation-history>`
           : this.details(setting, speed);
     return renderFamilyDialog(this.flow, {
-      title:
-        route === "curve"
+      title: group
+        ? settingGroups[group].label
+        : route === "curve"
           ? this.curveTitle
           : route === "history"
             ? "History"
@@ -154,7 +400,13 @@ export class ValloxAutopilotCard extends LitElement {
       content: html`<div class="modal-content">${content}</div>`,
       footer: this.error
         ? notice({ message: this.error, tone: "error" })
-        : undefined,
+        : this.settingRequest
+          ? notice({
+              message: this.settingRequest.accepted
+                ? "Request sent. Waiting for Home Assistant to confirm the value…"
+                : "Saving setting…",
+            })
+          : undefined,
       wide: route === "history" || route === "curve",
       long: route === "history" || route === "curve",
     });
@@ -294,25 +546,6 @@ export class ValloxAutopilotCard extends LitElement {
   }
   private settings() {
     const a = this.attrs;
-    const groups = [
-      ["Airflow", ["home_speed", "away_speed", "boost_speed", "boost_minutes"]],
-      [
-        "Sauna",
-        ["sauna_current_threshold", "sauna_on_seconds", "sauna_off_minutes"],
-      ],
-      [
-        "Winter & timing",
-        [
-          "winter_below",
-          "winter_rh_reduction",
-          "ramp_up",
-          "ramp_down",
-          "release_minutes",
-          "override_minutes",
-          "stale_minutes",
-        ],
-      ],
-    ] as const;
     return html`<vallox-response-curves
         .flowEmbedded=${true}
         @curve-open=${(event: CustomEvent<{ title: string }>) => {
@@ -335,46 +568,22 @@ export class ValloxAutopilotCard extends LitElement {
         }}
       ></vallox-response-curves>
       <div class="settings-overview" ?hidden=${this.flow.current === "curve"}>
-        ${groups.map(
-          ([name, keys]) =>
-            html`<details class="surface family-surface group">
-              <summary>${name}</summary>
-              ${keys.map((key) => {
-                const id = this.entity(key, "number");
-                const s = id ? this.hass?.states[id] : undefined;
-                return s
-                  ? html`<label class="setting"
-                      ><span
-                        >${(s.attributes.friendly_name ?? key).replace(
-                          /^Vallox Autopilot /,
-                          "",
-                        )}</span
-                      ><span
-                        ><input
-                          type="number"
-                          aria-label=${key.replaceAll("_", " ")}
-                          .value=${s.state}
-                          min=${s.attributes.min}
-                          max=${s.attributes.max}
-                          step=${s.attributes.step}
-                          ?disabled=${this.busy}
-                          @change=${(e: Event) => {
-                            const input = e.target as HTMLInputElement;
-                            if (input.checkValidity())
-                              void this.act(key, "number", "set_value", {
-                                value: Number(input.value),
-                              });
-                            else input.value = s.state;
-                          }}
-                        /><small
-                          >${s.attributes.unit_of_measurement ?? ""}</small
-                        ></span
-                      ></label
-                    >`
-                  : nothing;
-              })}
-            </details>`,
-        )}
+        ${(Object.keys(settingGroups) as SettingGroup[])
+          .filter((group) =>
+            settingGroups[group].keys.some((key) => this.numberMeta(key)),
+          )
+          .map(
+            (group) =>
+              html` <button
+                class="settings-link surface family-surface"
+                aria-haspopup="dialog"
+                ?disabled=${this.busy}
+                @click=${() => this.openGroup(group)}
+              >
+                ${icon(UI_ICONS.settings)}<span>${settingGroups[group]
+                  .label}</span>${icon(UI_ICONS.next)}
+              </button>`,
+          )}
         ${actionPill({
           label: "Native controls",
           icon: "mdi:fan",
@@ -386,6 +595,76 @@ export class ValloxAutopilotCard extends LitElement {
           mappings in the integration’s options.
         </p>
       </div>`;
+  }
+  private settingsGroup(group: SettingGroup) {
+    return html`<div class="settings-fields">
+      ${settingGroups[group].keys.map((key) => {
+        const draft = this.numberDrafts[key],
+          meta = this.numberMeta(key);
+        if (!draft) return nothing;
+        const label = meta?.label ?? key.replaceAll("_", " ");
+        const conflict =
+          !!meta &&
+          (meta.entity !== draft.entity ||
+            Number(meta.state.state) !== Number(draft.base));
+        const dirty = this.isDirty(draft);
+        return html`<section class="setting-field surface family-surface">
+          <label for=${`setting-${key}`}>${label}</label>
+          <div class="setting-controls">
+            <span class="setting-input-unit"
+              ><input
+                id=${`setting-${key}`}
+                type="number"
+                inputmode="decimal"
+                required
+                aria-label=${label}
+                .value=${draft.value}
+                min=${meta?.min ?? nothing}
+                max=${meta?.max ?? nothing}
+                step=${meta?.step ?? nothing}
+                ?disabled=${this.busy ||
+                !meta?.available ||
+                meta.entity !== draft.entity}
+                @input=${(event: Event) => {
+                  draft.value = (event.target as HTMLInputElement).value;
+                  this.error = "";
+                  this.requestUpdate();
+                }}
+                @keydown=${(event: KeyboardEvent) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void this.saveNumber(key);
+                  }
+                }}
+              /><small>${meta?.unit ?? ""}</small></span
+            >
+            <button
+              class="family-action"
+              aria-label=${`Save ${label}`}
+              ?disabled=${this.busy || !dirty || !meta?.available || conflict}
+              @click=${() => this.saveNumber(key)}
+            >
+              ${icon("mdi:content-save-outline")}Save
+            </button>
+          </div>
+          ${!meta?.available
+            ? notice({
+                message: "This setting is unavailable.",
+                tone: "warning",
+              })
+            : conflict
+              ? notice({
+                  message: `Changed elsewhere: ${meta.state.state} ${meta.unit}. Your draft is kept.`,
+                  tone: "warning",
+                  action: {
+                    label: "Reload current value",
+                    onClick: () => this.reloadNumber(key),
+                  },
+                })
+              : nothing}
+        </section>`;
+      })}
+    </div>`;
   }
   private overview() {
     const a = this.attrs;
@@ -585,8 +864,8 @@ export class ValloxAutopilotCard extends LitElement {
               aria-label="Settings"
               title="Settings"
               aria-haspopup="dialog"
-              aria-expanded=${String(this.flow.stack.includes("settings"))}
-              @click=${() => this.show("settings")}
+              @click=${(event: MouseEvent) =>
+                this.show("settings", event.currentTarget as HTMLElement)}
             >
               ${icon(UI_ICONS.settings)}
             </button>
@@ -702,8 +981,8 @@ export class ValloxAutopilotCard extends LitElement {
               ([key, mdi, label]) =>
                 html`<button
                   aria-haspopup="dialog"
-                  aria-expanded=${String(this.flow.stack.includes(key))}
-                  @click=${() => this.show(key)}
+                  @click=${(event: MouseEvent) =>
+                    this.show(key, event.currentTarget as HTMLElement)}
                 >
                   ${icon(mdi)}${label}
                 </button>`,

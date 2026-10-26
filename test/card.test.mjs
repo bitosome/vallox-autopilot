@@ -12,7 +12,25 @@ test('off fan reports zero despite a remembered nonzero percentage',async()=>{co
 test('invalid or unavailable fan setting never falls back to target or unit telemetry',async()=>{const{card}=fixture();for(const percentage of [null,undefined,NaN,Infinity,-1,101,'50',true]){card.hass.states['fan.native']={state:'on',attributes:{percentage}};card.hass={...card.hass};await card.updateComplete;assert.equal(card.shadowRoot.querySelector('.speed-reading strong').textContent,'Unavailable');assert.equal(card.shadowRoot.querySelector('.track>div').style.width,'0%')}for(const state of ['unavailable','unknown']){card.hass.states['fan.native']={state,attributes:{percentage:80}};card.hass={...card.hass};await card.updateComplete;assert.equal(card.shadowRoot.querySelector('.speed-reading strong').textContent,'Unavailable')}card.remove()});
 test('missing action is disabled',async()=>{const{card}=fixture();delete card.hass.states['button.renamed_boost'];await card.updateComplete;assert.ok(button(card,'Boost').disabled);card.remove()});
 test('service errors remain visible',async()=>{const{card}=fixture();card.hass.callService=async()=>{throw Error('Permission denied')};await card.updateComplete;button(card,'Boost').click();await new Promise(r=>setTimeout(r,0));await card.updateComplete;assert.equal(card.shadowRoot.querySelector('[role=alert]').textContent.trim(),'Permission denied');card.remove()});
-test('settings tab edits shared number entity',async()=>{const{card,calls}=fixture();await card.updateComplete;button(card,'Settings').click();await card.updateComplete;const input=card.shadowRoot.querySelector('input');input.value='35';input.dispatchEvent(new Event('change'));await card.updateComplete;assert.deepEqual(calls[0],['number','set_value',{entity_id:'number.speed',value:35}]);card.remove()});
+test('settings edit mapped numbers only after Save and confirmed readback', async () => {
+  const {card,calls}=fixture(); await card.updateComplete;
+  button(card,'Settings').click(); await card.updateComplete;
+  assert.equal(card.shadowRoot.querySelector('input'),null);
+  button(card,'Airflow').click(); await card.updateComplete;
+  const dialog=card.shadowRoot.querySelector('dialog');
+  const input=dialog.querySelector('input'); input.value='35'; input.dispatchEvent(new Event('input'));
+  input.dispatchEvent(new Event('change')); await card.updateComplete;
+  assert.deepEqual(calls,[]);
+  button(card,'Save Home speed').click(); await new Promise(r=>setTimeout(r,0)); await card.updateComplete;
+  assert.deepEqual(calls,[['number','set_value',{entity_id:'number.speed',value:35}]]);
+  assert.equal(input.disabled,true); assert.match(dialog.textContent,/Waiting for Home Assistant/);
+  card.shadowRoot.querySelector('dialog [aria-label=Back]').click(); await card.updateComplete;
+  assert.equal(dialog.getAttribute('aria-label'),'Airflow');
+  card.hass.states['number.speed'].state='35'; card.hass={...card.hass}; await card.updateComplete; await card.updateComplete;
+  assert.equal(input.disabled,false); assert.equal(button(card,'Save Home speed').disabled,true);
+  card.shadowRoot.querySelector('dialog [aria-label=Back]').click(); await card.updateComplete;
+  assert.equal(dialog.getAttribute('aria-label'),'Settings'); card.remove();
+});
 
 function curveFixture(){const {card,calls}=fixture();const a=card.hass.states['sensor.test'].attributes;Object.assign(a.settings,{home_speed:30,away_speed:10,boost_speed:80,winter_rh_reduction:5});a.curve_revisions={};a.response_curves={};for(const [key,x1,x2] of [['home',56,66],['shower',60,75],['excess',8,20],['co2',1000,1400]])a.response_curves[key]={home:[{x:x1,y:30},{x:x2,y:80}],away:[{x:x1,y:10},{x:x2,y:80}]};card.hass.callService=async(...args)=>{calls.push(args);if(args[0]==='vallox_autopilot'){const e=args[2],key=e.curve+':'+e.profile;if(e.expected_revision!==(a.curve_revisions[key]??0))throw Error('Curve changed elsewhere');a.response_curves[e.curve][e.profile]=structuredClone(e.points);a.curve_revisions[key]=(a.curve_revisions[key]??0)+1;card.hass={...card.hass}}};return{card,calls}}
 async function editor(card){await card.updateComplete;button(card,'Settings').click();await card.updateComplete;const curves=card.shadowRoot.querySelector('vallox-response-curves');await curves.updateComplete;button(curves,'Home humidity').click();await curves.updateComplete;return curves}
@@ -149,4 +167,91 @@ test('native handoff waits for dirty curve confirmation and dismissal sends no d
   button(card, 'Discard changes').click(); await card.updateComplete;
   assert.equal(entity, 'fan.native'); assert.equal(card.shadowRoot.querySelector('dialog'), null);
   assert.equal(calls.length, 0); card.remove();
+});
+
+async function settingGroup(card) {
+  await card.updateComplete; button(card,'Settings').click(); await card.updateComplete;
+  button(card,'Airflow').click(); await card.updateComplete;
+  return card.shadowRoot.querySelector('input');
+}
+function typeNumber(input,value){input.value=value;input.dispatchEvent(new Event('input'))}
+test('settings drafts survive telemetry and Back/X protect unfinished changes', async()=>{
+  const{card,calls}=fixture(); const input=await settingGroup(card);
+  input.focus();typeNumber(input,'37');await card.updateComplete;
+  card.hass={...card.hass}; await card.updateComplete;
+  assert.equal(card.shadowRoot.querySelector('input'),input);assert.equal(input.value,'37');assert.equal(card.shadowRoot.activeElement,input);
+  card.shadowRoot.querySelector('dialog [aria-label=Back]').click();await card.updateComplete;
+  assert.match(card.shadowRoot.textContent,/Discard unsaved settings/);
+  button(card,'Keep editing').click();await card.updateComplete;
+  assert.equal(card.shadowRoot.querySelector('input').value,'37');
+  card.shadowRoot.querySelector('dialog').dispatchEvent(new Event('cancel',{cancelable:true}));await card.updateComplete;
+  button(card,'Discard changes').click();await card.updateComplete;
+  assert.equal(card.shadowRoot.querySelector('dialog'),null);assert.deepEqual(calls,[]);card.remove();
+});
+test('external number changes keep the draft and require explicit reload before overwrite',async()=>{
+  const{card,calls}=fixture();const input=await settingGroup(card);typeNumber(input,'35');await card.updateComplete;
+  card.hass.states['number.speed'].state='40';card.hass={...card.hass};await card.updateComplete;
+  assert.equal(input.value,'35');assert.match(card.shadowRoot.textContent,/Changed elsewhere: 40/);
+  assert.equal(button(card,'Save Home speed').disabled,true);
+  button(card,'Reload current value').click();await card.updateComplete;
+  assert.equal(input.value,'40');assert.equal(button(card,'Save Home speed').disabled,true);assert.deepEqual(calls,[]);card.remove();
+});
+test('empty, out-of-range and off-step values never send setting commands',async()=>{
+  const{card,calls}=fixture();card.hass.states['number.speed'].attributes.step=5;
+  const input=await settingGroup(card);
+  for(const invalid of ['', '9', '101', '32']) {typeNumber(input,invalid);await card.updateComplete;button(card,'Save Home speed').click();await card.updateComplete;assert.match(card.shadowRoot.textContent,/Enter a value from 10 to 100/)}
+  assert.deepEqual(calls,[]);card.remove();
+});
+test('failed number saves keep editable drafts and a visible error',async()=>{
+  const{card}=fixture();const input=await settingGroup(card);card.hass.callService=async()=>{throw Error('Permission denied')};
+  typeNumber(input,'35');await card.updateComplete;button(card,'Save Home speed').click();await new Promise(r=>setTimeout(r,0));await card.updateComplete;
+  assert.equal(input.value,'35');assert.equal(input.disabled,false);assert.match(card.shadowRoot.querySelector('dialog').textContent,/Permission denied/);
+  card.shadowRoot.querySelector('dialog [aria-label=Back]').click();await card.updateComplete;assert.match(card.shadowRoot.textContent,/Discard unsaved settings/);card.remove();
+});
+test('number mapping changes cannot redirect a draft to another entity',async()=>{
+  const{card,calls}=fixture();const input=await settingGroup(card);typeNumber(input,'35');await card.updateComplete;
+  card.hass.states['number.other']={state:'30',attributes:{...card.hass.states['number.speed'].attributes}};
+  card.hass.states['sensor.test'].attributes.entities.home_speed='number.other';card.hass={...card.hass};await card.updateComplete;
+  assert.equal(input.disabled,true);assert.equal(button(card,'Save Home speed').disabled,true);assert.deepEqual(calls,[]);card.remove();
+});
+test('late failed save after reconfiguration cannot alter the new settings flow',async()=>{
+  const{card}=fixture();const input=await settingGroup(card);let reject;card.hass.callService=()=>new Promise((_,r)=>reject=r);
+  typeNumber(input,'35');await card.updateComplete;button(card,'Save Home speed').click();await card.updateComplete;
+  card.setConfig({entity:'sensor.test',name:'Renamed'});await card.updateComplete;
+  button(card,'Settings').click();await card.updateComplete;reject(Error('Old request failed'));await new Promise(r=>setTimeout(r,0));await card.updateComplete;
+  assert.equal(card.shadowRoot.querySelector('dialog').getAttribute('aria-label'),'Settings');assert.doesNotMatch(card.shadowRoot.textContent,/Old request failed/);card.remove();
+});
+test('unavailable numbers remain non-editable without producing an unsaved draft',async()=>{
+  const{card,calls}=fixture();card.hass.states['number.speed'].state='unavailable';const input=await settingGroup(card);
+  assert.equal(input.disabled,true);card.shadowRoot.querySelector('dialog [aria-label=Back]').click();await card.updateComplete;
+  assert.equal(card.shadowRoot.querySelector('dialog').getAttribute('aria-label'),'Settings');assert.deepEqual(calls,[]);card.remove();
+});
+test('untouched settings follow telemetry without becoming conflicting drafts',async()=>{
+  const{card,calls}=fixture();const input=await settingGroup(card);
+  card.hass.states['number.speed'].state='40';card.hass={...card.hass};await card.updateComplete;await card.updateComplete;
+  assert.equal(input.value,'40');assert.doesNotMatch(card.shadowRoot.textContent,/Changed elsewhere/);
+  card.shadowRoot.querySelector('dialog [aria-label=Back]').click();await card.updateComplete;
+  assert.equal(card.shadowRoot.querySelector('dialog').getAttribute('aria-label'),'Settings');assert.deepEqual(calls,[]);card.remove();
+});
+test('unconfirmed setting requests time out without losing the draft or trapping navigation',async(t)=>{
+  const{card,calls}=fixture();const input=await settingGroup(card);
+  t.mock.timers.enable({apis:['setTimeout']});
+  typeNumber(input,'35');await card.updateComplete;button(card,'Save Home speed').click();await card.updateComplete;
+  card.shadowRoot.querySelector('dialog [aria-label=Back]').click();await card.updateComplete;
+  assert.equal(card.shadowRoot.querySelector('dialog').getAttribute('aria-label'),'Airflow');
+  t.mock.timers.tick(15000);await card.updateComplete;
+  assert.equal(input.value,'35');assert.equal(input.disabled,false);assert.match(card.shadowRoot.querySelector('dialog').textContent,/No confirmation received/);
+  assert.doesNotMatch(card.shadowRoot.querySelector('dialog').textContent,/Wait for the setting to be confirmed/);
+  card.shadowRoot.querySelector('dialog [aria-label=Back]').click();await card.updateComplete;
+  assert.match(card.shadowRoot.textContent,/Discard unsaved settings/);assert.equal(calls.length,1);card.remove();
+});
+test('modal launchers use one cog and restore the clicked opener without relying on click focus',async()=>{
+  const{card,calls}=fixture();await card.updateComplete;
+  const opener=card.shadowRoot.querySelector('header [aria-label="Settings"]');
+  assert.equal(card.shadowRoot.querySelectorAll('[aria-label="Settings"]').length,1);
+  assert.equal(opener.querySelector('ha-icon').getAttribute('icon'),'mdi:cog-outline');
+  for(const launcher of card.shadowRoot.querySelectorAll('[aria-haspopup="dialog"]'))assert.equal(launcher.hasAttribute('aria-expanded'),false);
+  opener.click();await card.updateComplete;
+  card.shadowRoot.querySelector('dialog [title="Close"]').click();await card.updateComplete;
+  assert.equal(card.shadowRoot.activeElement,opener);assert.deepEqual(calls,[]);card.remove();
 });
