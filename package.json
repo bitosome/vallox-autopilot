@@ -1,6 +1,6 @@
 {
   "name": "vallox-autopilot",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "type": "module",
   "license": "MIT",
   "scripts": {
@@ -12,7 +12,7 @@
     "format:check": "prettier --check src/card.ts src/styles.ts src/curves.ts src/history.ts"
   },
   "dependencies": {
-    "@bitosome/ha-card-ui": "https://github.com/bitosome/ha-card-ui/releases/download/v1.0.0/bitosome-ha-card-ui-1.0.0.tgz",
+    "@bitosome/ha-card-ui": "https://github.com/bitosome/ha-card-ui/releases/download/v1.0.1/bitosome-ha-card-ui-1.0.1.tgz",
     "lit": "^3.3.1"
   },
   "devDependencies": {

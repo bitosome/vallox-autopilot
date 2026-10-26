@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.3 — 2026-10-26
+
+- Bundle shared UI 1.0.1 to keep notices above activation glows while retaining existing controls and domain behavior.
+
 ## 0.7.2
 
 - Open Airflow, Sauna and Winter & timing as shallow Settings child pages with visible number fields and explicit per-setting Save actions.

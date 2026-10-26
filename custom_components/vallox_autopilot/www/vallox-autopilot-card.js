@@ -603,6 +603,8 @@ const _=globalThis,k=t=>t,A=_.trustedTypes,S=A?A.createPolicy("lit-html",{create
     outline-offset: 3px;
   }
   .family-notice {
+    position: relative;
+    z-index: 1;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
