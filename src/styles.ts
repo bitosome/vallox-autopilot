@@ -34,7 +34,8 @@ export const styles = [
       background: var(--surface);
       border: 1px solid var(--divider-color, #0001);
       border-radius: var(--ha-card-border-radius, 24px);
-      overflow: visible;
+      /* Bound the halo to this dashboard card; inner tile gaps remain open. */
+      overflow: clip;
       container-type: inline-size;
     }
     .root {
