@@ -9,7 +9,7 @@ A Home Assistant integration and bundled dashboard card for gradual, configurabl
 1. Install the native Vallox integration and confirm its fan, humidity, CO₂ and temperature entities work.
 2. Add `https://github.com/bitosome/vallox-autopilot` to HACS as an **Integration**, download and restart Home Assistant.
 3. Add **Vallox Autopilot** in Settings → Devices & services. Select the native fan, dry-house humidity sensors, shower humidity, CO₂ and heat-recovery/outdoor sensors. Leave the occupancy input empty to use the integration’s shared Home mode switch (`on` = Home, `off` = Away). For sauna detection, choose heater current sensors in amperes, or an existing external sauna binary sensor. Keep shower sensors out of the dry-house group.
-4. Add the **Vallox Autopilot** dashboard card and select its Status sensor. The module registers automatically; YAML dashboards can load `/vallox_autopilot/card.js?v=0.7.4` as a JavaScript module.
+4. Add the **Vallox Autopilot** dashboard card and select its Status sensor. The module registers automatically; YAML dashboards can load `/vallox_autopilot/card.js?v=0.7.5` as a JavaScript module.
 5. Review settings before turning Auto on. New controllers start **off**.
 
 ```yaml
@@ -79,3 +79,7 @@ The main percentage is the native fan entity's acknowledged `percentage`, labell
 In the integration's entity mappings, optionally select the native **Supply fan speed** and **Extract fan speed** sensors (unit `rpm`) and **Post-heater** binary sensor. Enable those native entities first if they are disabled. The card shows their independent readings beneath the setting. Post-heater Active/Off means the native post-heating output state, not heater configuration or power consumption. Unavailable telemetry is never interpreted as stopped/off and does not affect automatic demand.
 
 Vallox also reports a separate operating percentage, retained in Details and History. Native CO₂/humidity regulation or protections may make this differ from the configured setting. The decorative fan follows native operating telemetry and, when RPM inputs are mapped, requires measured rotation. It is not a literal RPM display. The read-only Fan setting sensor records the acknowledged native percentage for Home Assistant's native history graph; its history starts when this version is installed, without fabricated backfill.
+
+## Integration artwork
+
+The integration uses a compact ventilation grille and airflow mark, with native Home Assistant light/dark and high-resolution brand assets. Editable SVG sources live in `custom_components/vallox_autopilot/brand/`; rebuild PNGs with `uv run --with cairosvg==2.9.1 python tools/render_branding.py`. This is project artwork, not the official Vallox manufacturer logo.

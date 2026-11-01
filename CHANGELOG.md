@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.5 — 2026-11-01
+
+- Replace the ambiguous fan artwork with a clear ventilation grille and airflow mark. Supply matching light/dark, standard and high-resolution PNGs from editable SVG sources.
+- Preserve all ventilation controls, card behavior and integration settings.
+
 ## 0.7.4 — 2026-10-26
 
 - Bound activation glows to the outer dashboard card so they cannot wash over neighboring cards. Keep internal tile gaps, focus rings and native top-layer dialogs visible.

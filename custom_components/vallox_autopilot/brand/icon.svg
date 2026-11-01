@@ -1,24 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none">
   <title>Vallox Autopilot</title>
-  <desc>Four curved fan blades in lavender and blue inside a rounded ventilation housing.</desc>
-  <defs>
-    <linearGradient id="housing" x1="24" y1="16" x2="224" y2="248" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#f1edfa"/>
-      <stop offset="1" stop-color="#dceaf4"/>
-    </linearGradient>
-    <linearGradient id="air" x1="52" y1="48" x2="196" y2="208" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#8455b4"/>
-      <stop offset="0.52" stop-color="#687bc2"/>
-      <stop offset="1" stop-color="#288ba7"/>
-    </linearGradient>
-  </defs>
-  <rect x="8" y="8" width="240" height="240" rx="62" fill="url(#housing)"/>
-  <rect x="9" y="9" width="238" height="238" rx="61" stroke="#c6c9dc" stroke-opacity=".42" stroke-width="2"/>
-  <g fill="url(#air)">
-    <path d="M116 106C98 88 94 62 111 47C127 33 154 36 170 53C186 71 177 96 158 103C145 108 135 105 126 108Z"/>
-    <path d="M150 116C168 98 194 94 209 111C223 127 220 154 203 170C185 186 160 177 153 158C148 145 151 135 148 126Z"/>
-    <path d="M140 150C158 168 162 194 145 209C129 223 102 220 86 203C70 185 79 160 98 153C111 148 121 151 130 148Z"/>
-    <path d="M106 140C88 158 62 162 47 145C33 129 36 102 53 86C71 70 96 79 103 98C108 111 105 121 108 130Z"/>
-    <circle cx="128" cy="128" r="15"/>
-  </g>
+  <desc>A ventilation grille with three clear airflow lines.</desc>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="#f0edf7"/>
+  <rect x="9" y="9" width="238" height="238" rx="55" stroke="#d8d2e7" stroke-width="2"/>
+  <rect x="46" y="48" width="104" height="160" rx="18" stroke="#8051a7" stroke-width="12"/>
+  <path d="M72 88H124M72 128H124M72 168H124" stroke="#8051a7" stroke-width="12" stroke-linecap="round"/>
+  <path d="M169 93C184 77 197 109 212 93M169 133C184 117 197 149 212 133M169 173C184 157 197 189 212 173" stroke="#397e96" stroke-width="10" stroke-linecap="round"/>
 </svg>
