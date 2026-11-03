@@ -1,4 +1,5 @@
 import { LitElement, html, css, nothing } from "lit";
+import { asyncState, togglePill } from "@bitosome/ha-card-ui";
 import { styles } from "./styles";
 
 type HistoryCard = HTMLElement & { hass?: any };
@@ -11,6 +12,7 @@ export class VentilationHistory extends LitElement {
     hours: { state: true },
     chart: { state: true },
     error: { state: true },
+    empty: { state: true },
     loading: { state: true },
   };
   hass: any;
@@ -19,6 +21,7 @@ export class VentilationHistory extends LitElement {
   hours = 24;
   chart: HistoryCard | null = null;
   error = "";
+  empty = "";
   loading = false;
   private generation = 0;
   private signature = "";
@@ -43,12 +46,8 @@ export class VentilationHistory extends LitElement {
       .history-heading {
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        justify-content: flex-end;
         margin-bottom: 12px;
-      }
-      .history-heading h2 {
-        font-size: 15px;
-        margin: 0;
       }
       .history-heading select {
         font-size: 16px;
@@ -56,17 +55,16 @@ export class VentilationHistory extends LitElement {
         border: 0;
         border-radius: 12px;
         padding: 8px;
-        background: var(--surface);
+        background: var(--family-surface);
       }
       .chart {
         min-width: 0;
         --ha-card-border-width: 0;
         --ha-card-box-shadow: none;
       }
-      .hint {
-        margin-top: 12px;
-      }
-      .notice {
+      .hint,
+      .family-notice,
+      .family-async-state {
         margin-top: 12px;
       }
     `,
@@ -119,10 +117,14 @@ export class VentilationHistory extends LitElement {
     const generation = ++this.generation;
     this.chart = null;
     this.error = "";
+    this.empty = "";
+    if (!series.length) {
+      this.loading = false;
+      this.empty = "No configured sensors are available for this graph.";
+      return;
+    }
     this.loading = true;
     try {
-      if (!series.length)
-        throw Error("No configured sensors are available for this graph.");
       const load = (window as any).loadCardHelpers;
       if (!load)
         throw Error(
@@ -147,7 +149,6 @@ export class VentilationHistory extends LitElement {
   protected render() {
     return html`<section aria-label="Ventilation history">
       <div class="history-heading">
-        <h2>History</h2>
         <select
           aria-label="History period"
           .value=${String(this.hours)}
@@ -169,30 +170,26 @@ export class VentilationHistory extends LitElement {
           ["humidity", "Humidity"],
           ["co2", "CO₂"],
           ["temperature", "Temperature"],
-        ].map(
-          ([key, label]) =>
-            html`<button
-              class=${`pill family-action ${key === this.selected ? "active" : ""}`}
-              aria-pressed=${key === this.selected}
-              @click=${() => (this.selected = key)}
-            >
-              ${label}
-            </button>`,
+        ].map(([key, label]) =>
+          togglePill({
+            label,
+            pressed: key === this.selected,
+            onClick: () => (this.selected = key),
+          }),
         )}
       </div>
       <div class="chart">${this.chart}</div>
       ${this.loading
-        ? html`<p role="status" class="hint">Loading recorded history…</p>`
-        : nothing}${this.error
-        ? html`<div class="notice" role="status">
-            ${this.error}<button
-              class="pill family-action"
-              @click=${() => this.load(this.series())}
-            >
-              Retry
-            </button>
-          </div>`
-        : nothing}
+        ? asyncState({ state: "loading", message: "Loading recorded history…" })
+        : this.empty
+          ? asyncState({ state: "empty", message: this.empty })
+          : this.error
+            ? asyncState({
+                state: "error",
+                message: this.error,
+                onRetry: () => this.load(this.series()),
+              })
+            : nothing}
       <p class="hint">
         Recorded by Home Assistant. Gaps indicate missing
         readings.${this.selected === "speed"

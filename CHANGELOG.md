@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.0 — 2026-11-03
+
+- Bundle shared UI 1.4.0. Show sauna, sensor-fallback, error and setup messages as shared notices with severity icons; list unusable fallback inputs directly in the notice instead of a collapsed section.
+- Show a spinner and progress label on Boost, End boost, Resume auto and setting Save while the request is pending, with the same busy state for assistive technology.
+- Keep History loading, no-sensor and failed states distinct, with one Try again action and no repeated History heading. Curve save errors use the same notice with Try again and Reload shared curve.
+- Mark selected history graphs, Home/Away curves and curve points with shared toggle pills.
+- Format readings, fan RPM, boost end and decision times with the Home Assistant profile language, number format, 12/24-hour clock and time zone; decisions from earlier days include their date. Missing readings say `Unavailable` in the curve editor too.
+- Use the shared success, warning, error and active colours for status dots and the activation glow, the heating colour for an active post-heater, the Home Assistant font and larger curve labels, and a chevron for Recent decisions.
+- Preserve ventilation algorithms, entity contracts, settings, response curves and curve editing behavior.
+
 ## 0.7.5 — 2026-11-01
 
 - Replace the ambiguous fan artwork with a clear ventilation grille and airflow mark. Supply matching light/dark, standard and high-resolution PNGs from editable SVG sources.

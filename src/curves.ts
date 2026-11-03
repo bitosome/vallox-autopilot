@@ -1,5 +1,12 @@
 import { LitElement, html, svg, css, nothing, type PropertyValues } from "lit";
-import { UI_ICONS } from "@bitosome/ha-card-ui";
+import {
+  UI_ICONS,
+  notice,
+  togglePill,
+  formatHassNumber,
+  UNAVAILABLE_TEXT,
+  type FormatHass,
+} from "@bitosome/ha-card-ui";
 import { styles } from "./styles";
 
 const definitions = {
@@ -47,10 +54,13 @@ export type CurveEdit = {
 };
 type Curves = Partial<Record<CurveKey, Record<Profile, Point[]>>>;
 const copy = (p: Point[]) => p.map((p) => ({ ...p }));
+const missing = (text: string) =>
+  text === UNAVAILABLE_TEXT ? "family-unavailable" : "";
 
 export class ResponseCurves extends LitElement {
   static properties = {
     flowEmbedded: { type: Boolean },
+    hass: { attribute: false },
     settings: { attribute: false },
     readings: { attribute: false },
     curves: { attribute: false },
@@ -70,6 +80,8 @@ export class ResponseCurves extends LitElement {
     compare: { state: true },
   };
   flowEmbedded = false;
+  /** Locale source for displayed readings only. */
+  hass?: FormatHass;
   settings: Record<string, number> = {};
   readings: Record<string, number | null> = {};
   curves: Curves = {};
@@ -208,7 +220,7 @@ export class ResponseCurves extends LitElement {
       }
       .bounds {
         font-size: 11px;
-        color: var(--muted);
+        color: var(--family-muted);
         margin-left: auto;
       }
       .graph {
@@ -224,8 +236,9 @@ export class ResponseCurves extends LitElement {
         overflow: visible;
       }
       .graph text {
-        font: 11px system-ui;
-        fill: var(--muted);
+        font-family: var(--family-font);
+        font-size: 11px;
+        fill: var(--family-muted);
       }
       .grid {
         stroke: var(--divider-color, #8883);
@@ -238,7 +251,7 @@ export class ResponseCurves extends LitElement {
         stroke: var(--primary-color);
       }
       .other {
-        stroke: var(--muted);
+        stroke: var(--family-muted);
         stroke-width: 1.5;
         stroke-dasharray: 4 5;
         opacity: 0.5;
@@ -272,7 +285,7 @@ export class ResponseCurves extends LitElement {
         height: 12px;
         border: 2px solid var(--primary-color);
         border-radius: 50%;
-        background: var(--surface);
+        background: var(--family-surface);
       }
       .point.selected::before {
         background: var(--primary-color);
@@ -295,7 +308,7 @@ export class ResponseCurves extends LitElement {
         display: grid;
         gap: 6px;
         font-size: 12px;
-        color: var(--muted);
+        color: var(--family-muted);
       }
       .point-fields input {
         width: 100%;
@@ -304,19 +317,19 @@ export class ResponseCurves extends LitElement {
         padding: 8px 10px;
         border-radius: 10px;
         border: 1px solid var(--divider-color, #8883);
-        background: var(--surface);
+        background: var(--family-surface);
       }
       .curve-tools {
         flex-wrap: wrap;
         margin-top: 8px;
       }
-      .curve-tools .pill {
+      .curve-tools .family-action {
         font-size: 12px;
         padding: 8px 10px;
       }
       .save-state {
         font-size: 11px;
-        color: var(--muted);
+        color: var(--family-muted);
         margin: 10px 0 0;
       }
       .hint {
@@ -326,17 +339,10 @@ export class ResponseCurves extends LitElement {
       }
       .live {
         font-size: 12px;
-        color: var(--muted);
+        color: var(--family-muted);
       }
-      .edit-error {
-        padding: 10px 0;
-        font-size: 12px;
-      }
-      .error-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-top: 8px;
+      .curve-panel .family-notice {
+        margin-top: 12px;
       }
       .curve-overview {
         min-width: 0;
@@ -348,7 +354,7 @@ export class ResponseCurves extends LitElement {
         display: block;
         font-size: 11px;
         font-weight: 400;
-        color: var(--muted);
+        color: var(--family-muted);
         margin-top: 4px;
       }
       .curve-title .save-state {
@@ -380,7 +386,7 @@ export class ResponseCurves extends LitElement {
       }
       .summary-copy span {
         font-size: 11px;
-        color: var(--muted);
+        color: var(--family-muted);
       }
       .spark {
         width: 76px;
@@ -416,10 +422,13 @@ export class ResponseCurves extends LitElement {
         gap: 8px;
         margin-top: 14px;
         font-size: 11px;
-        color: var(--muted);
+        color: var(--family-muted);
       }
       .curve-context b {
         color: var(--primary-text-color);
+      }
+      .curve-context b.family-unavailable {
+        color: var(--family-unavailable);
       }
       .graph {
         margin: 4px 0 8px;
@@ -429,8 +438,8 @@ export class ResponseCurves extends LitElement {
         flex-wrap: wrap;
         gap: 8px;
         justify-content: space-between;
-        font-size: 10px;
-        color: var(--muted);
+        font-size: 12px;
+        color: var(--family-muted);
       }
       .graph-footer label {
         display: flex;
@@ -458,8 +467,8 @@ export class ResponseCurves extends LitElement {
         border-radius: 12px;
       }
       .point-strip span {
-        font-size: 10px;
-        color: var(--muted);
+        font-size: 11px;
+        color: var(--family-muted);
       }
       .point-fields {
         gap: 8px;
@@ -474,7 +483,7 @@ export class ResponseCurves extends LitElement {
       .live {
         font-size: 11px;
       }
-      .curve-profiles .pill {
+      .curve-profiles .family-action {
         font-size: 12px;
         gap: 6px;
         padding: 8px 12px;
@@ -789,24 +798,23 @@ export class ResponseCurves extends LitElement {
     this.pointIndex = at;
     void this.commit();
   }
+  private readingText(reading: number | null | undefined, unit: string) {
+    return typeof reading === "number"
+      ? `${formatHassNumber(this.hass, reading, { maximumFractionDigits: 1 })} ${unit}`
+      : UNAVAILABLE_TEXT;
+  }
   private profiles() {
     return html`<div class="curve-profiles" aria-label="Occupancy curve">
-      ${(["home", "away"] as Profile[]).map(
-        (profile) =>
-          html`<button
-            class=${`pill family-action ${this.profile === profile ? "active" : ""}`}
-            aria-label=${`Edit ${profile} curve`}
-            aria-pressed=${this.profile === profile}
-            ?disabled=${this.locked}
-            @click=${() => this.select(this.selected, profile)}
-          >
-            <ha-icon
-              icon=${profile === "home"
-                ? "mdi:home-outline"
-                : "mdi:home-export-outline"}
-            ></ha-icon
-            >${profile === "home" ? "Home" : "Away"}
-          </button>`,
+      ${(["home", "away"] as Profile[]).map((profile) =>
+        togglePill({
+          label: profile === "home" ? "Home" : "Away",
+          icon:
+            profile === "home" ? "mdi:home-outline" : "mdi:home-export-outline",
+          ariaLabel: `Edit ${profile} curve`,
+          pressed: this.profile === profile,
+          disabled: this.locked,
+          onClick: () => this.select(this.selected, profile),
+        }),
       )}<span class="bounds"
         >${this.settings[`${this.profile}_speed`]}–${this.settings.boost_speed}%
         fan</span
@@ -825,6 +833,7 @@ export class ResponseCurves extends LitElement {
           const key = k as CurveKey,
             points = this.curves[key]?.[this.profile] ?? [],
             reading = this.reading(key),
+            readingText = this.readingText(reading, d.unit),
             paused = this.inhibited && key !== "co2",
             shift =
               this.winter && ["home", "shower"].includes(key)
@@ -840,10 +849,7 @@ export class ResponseCurves extends LitElement {
             <div class="summary-copy">
               <strong>${d.label}</strong
               ><span
-                >${typeof reading === "number"
-                  ? `${Math.round(reading * 10) / 10} ${d.unit}`
-                  : "No reading"}
-                ·
+                ><span class=${missing(readingText)}>${readingText}</span> ·
                 ${paused
                   ? "Paused for sauna"
                   : points.length && typeof reading === "number"
@@ -888,6 +894,11 @@ export class ResponseCurves extends LitElement {
     const other =
       this.curves[this.selected]?.[this.profile === "home" ? "away" : "home"];
     const reading = this.reading(this.selected);
+    const readingText = this.readingText(reading, d.unit);
+    const request =
+      typeof reading === "number"
+        ? `${Math.round(this.response(p, reading + this.shift))}%`
+        : UNAVAILABLE_TEXT;
     const selected = p[this.pointIndex],
       b = this.limits(this.pointIndex);
     return html`<section class="surface family-surface curve-panel">
@@ -905,7 +916,7 @@ export class ResponseCurves extends LitElement {
             ? nothing
             : html`<small>Response curve</small>`}</span
         ><button
-          class="pill family-action fit"
+          class="family-action quiet fit"
           @click=${() => {
             this.viewport = null;
             this.requestUpdate();
@@ -916,17 +927,12 @@ export class ResponseCurves extends LitElement {
       </div>
       ${this.profiles()}
       <div class="curve-context">
-        <span
-          >Now
-          <b
-            >${typeof reading === "number"
-              ? `${Math.round(reading * 10) / 10} ${d.unit}`
-              : "—"}</b
-          ></span
+        <span>Now <b class=${missing(readingText)}>${readingText}</b></span
         ><span
           >${this.inhibited && this.selected !== "co2"
             ? "Paused for sauna"
-            : `Curve request ${typeof reading === "number" ? Math.round(this.response(p, reading + this.shift)) + "%" : "—"}`}</span
+            : html`Curve request
+                <b class=${missing(request)}>${request}</b>`}</span
         >
       </div>
       <div
@@ -997,7 +1003,7 @@ export class ResponseCurves extends LitElement {
         ${p.map(
           (point, i) =>
             html`<button
-              class=${`pill family-action ${this.pointIndex === i ? "active" : ""}`}
+              class="family-action family-toggle"
               aria-label=${`Select point ${i + 1}`}
               aria-pressed=${this.pointIndex === i}
               @click=${() => (this.pointIndex = i)}
@@ -1053,27 +1059,26 @@ export class ResponseCurves extends LitElement {
         </button>
       </div>
       ${this.error
-        ? html`<div class="edit-error" role="alert">
-            ${this.error}
-            <div class="error-actions">
-              <button
-                class="pill family-action"
-                ?disabled=${this.locked}
-                @click=${() => this.commit()}
-              >
-                Retry</button
-              ><button
-                class="pill family-action"
-                ?disabled=${this.locked}
-                @click=${() => {
+        ? notice({
+            message: this.error,
+            tone: "error",
+            action: {
+              label: "Try again",
+              icon: "mdi:refresh",
+              disabled: this.locked,
+              onClick: () => this.commit(),
+            },
+            actions: [
+              {
+                label: "Reload shared curve",
+                disabled: this.locked,
+                onClick: () => {
                   this.draft = null;
                   this.error = "";
-                }}
-              >
-                Reload shared curve
-              </button>
-            </div>
-          </div>`
+                },
+              },
+            ],
+          })
         : nothing}
       <p class="save-state" role="status">
         ${this.saving || this.pendingRevision !== null

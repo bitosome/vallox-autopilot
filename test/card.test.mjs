@@ -255,3 +255,81 @@ test('modal launchers use one cog and restore the clicked opener without relying
   card.shadowRoot.querySelector('dialog [title="Close"]').click();await card.updateComplete;
   assert.equal(card.shadowRoot.activeElement,opener);assert.deepEqual(calls,[]);card.remove();
 });
+test('boost and resume presses show shared pending feedback until the request settles',async()=>{
+  const{card,calls}=fixture();const a=card.hass.states['sensor.test'].attributes;
+  a.hold_until=1;a.entities.resume='button.resume';card.hass.states['button.resume']={state:'unknown',attributes:{}};
+  let finish;card.hass.callService=(...args)=>{calls.push(args);return new Promise(r=>finish=r)};
+  await card.updateComplete;button(card,'Boost').click();await card.updateComplete;
+  const boost=card.shadowRoot.querySelector('.actions .family-action[aria-busy="true"]');
+  assert.match(boost.textContent,/Starting boost…/);assert.ok(boost.disabled);assert.ok(boost.querySelector('.family-pending-indicator'));
+  assert.ok(button(card,'Resume auto').disabled);assert.equal(button(card,'Resume auto').getAttribute('aria-busy'),'false');
+  finish();await new Promise(r=>setTimeout(r,0));await card.updateComplete;
+  assert.equal(card.shadowRoot.querySelector('[aria-busy="true"]'),null);assert.equal(button(card,'Boost').disabled,false);
+  button(card,'Resume auto').click();await card.updateComplete;
+  assert.equal(button(card,'Resuming…').getAttribute('aria-busy'),'true');assert.deepEqual(calls.at(-1),['button','press',{entity_id:'button.resume'}]);
+  finish();await new Promise(r=>setTimeout(r,0));card.remove();
+});
+test('setting Save stays busy until Home Assistant reads the value back',async()=>{
+  const{card}=fixture();const input=await settingGroup(card);typeNumber(input,'35');await card.updateComplete;
+  button(card,'Save Home speed').click();await new Promise(r=>setTimeout(r,0));await card.updateComplete;
+  const save=button(card,'Save Home speed');assert.equal(save.getAttribute('aria-busy'),'true');assert.match(save.textContent,/Saving…/);
+  card.hass.states['number.speed'].state='35';card.hass={...card.hass};await card.updateComplete;await card.updateComplete;
+  assert.equal(button(card,'Save Home speed').getAttribute('aria-busy'),'false');card.remove();
+});
+test('card notices use shared severity notices with the fallback inputs visible',async()=>{
+  const{card}=fixture();Object.assign(card.hass.states['sensor.test'].attributes,{sauna_inhibited:true,sauna_active:true,degraded:true,settings:{boost_minutes:15,home_speed:30},input_issues:[{entity_id:'sensor.current',name:'Sauna phase 1',reason:'Unavailable'}]});
+  await card.updateComplete;
+  assert.equal(card.shadowRoot.querySelector('.notice'),null);
+  const notices=[...card.shadowRoot.querySelectorAll('.family-notice')];
+  assert.deepEqual(notices.map(n=>n.dataset.tone),['accent','warning']);
+  assert.ok(notices.every(n=>n.querySelector('.family-notice-icon')));
+  assert.match(notices[1].querySelector('.family-notice-title').textContent,/Sensor fallback · minimum 30%/);
+  let id;card.addEventListener('hass-more-info',e=>id=e.detail.entityId);notices[1].querySelector('.data-row').click();assert.equal(id,'sensor.current');
+  card.hass.states['sensor.test'].attributes.sauna_active=null;card.hass={...card.hass};await card.updateComplete;
+  assert.equal(card.shadowRoot.querySelector('.family-notice').dataset.tone,'warning');
+  card.hass.callService=async()=>{throw Error('Permission denied')};button(card,'Boost').click();await new Promise(r=>setTimeout(r,0));await card.updateComplete;
+  assert.equal(card.shadowRoot.querySelector('[role=alert]').dataset.tone,'error');card.remove();
+});
+test('times and readings follow the Home Assistant profile; older decisions name their date',async()=>{
+  const{card}=fixture();const now=Date.now()/1000,a=card.hass.states['sensor.test'].attributes;
+  a.events=[{time:now-3*86400,message:'Older'},{time:now,message:'Latest'}];
+  card.hass.locale={language:'en',number_format:'decimal_comma',time_format:'24',time_zone:'server'};card.hass.config={time_zone:'UTC'};
+  telemetry(card,{supply_fan_rpm:1042.4});await card.updateComplete;
+  assert.match(card.shadowRoot.querySelector('.telemetry strong').textContent,/^1\.042 rpm$/);
+  button(card,'Details').click();await card.updateComplete;
+  const times=[...card.shadowRoot.querySelectorAll('.event time')].map(t=>t.textContent);
+  assert.match(times[0],/^\d{2}:\d{2}$/);assert.match(times[1],/[A-Z][a-z]{2}/);assert.match(times[1],/\d{2}:\d{2}/);
+  assert.equal(card.shadowRoot.querySelector('details summary ha-icon').getAttribute('icon'),'mdi:chevron-down');
+  card.hass={...card.hass,locale:{language:'en',time_format:'12',time_zone:'server'}};await card.updateComplete;
+  assert.match(card.shadowRoot.querySelector('.event time').textContent,/AM|PM/);card.remove();
+});
+test('empty decisions and unbound or missing details use the shared wording',async()=>{
+  const{card}=fixture();await card.updateComplete;button(card,'Details').click();await card.updateComplete;
+  assert.match(card.shadowRoot.querySelector('details .family-async-state').textContent,/No decisions yet/);
+  const rows=[...card.shadowRoot.querySelectorAll('.data-row')];
+  assert.match(rows.find(r=>r.textContent.includes('Filter service')).textContent,/Not configured/);
+  const sauna=rows.find(r=>r.textContent.includes('Sauna'));assert.ok(sauna.querySelector('b.family-unavailable'));card.remove();
+});
+test('history keeps empty, loading and failed states distinct with one retry',async()=>{
+  let attempts=0;window.loadCardHelpers=async()=>{attempts++;throw Error('Could not load history')};
+  const h=document.createElement('vallox-ventilation-history');h.hass={states:{'sensor.co2':{state:'800'}}};h.readings={entities:{},bindings:{co2_entity:'sensor.co2'}};
+  document.body.append(h);await h.updateComplete;await new Promise(r=>setTimeout(r,0));await h.updateComplete;
+  assert.equal(h.shadowRoot.querySelector('h2'),null);
+  assert.match(h.shadowRoot.querySelector('.family-async-state').textContent,/No configured sensors/);assert.equal(h.shadowRoot.querySelector('[role=alert]'),null);assert.equal(attempts,0);
+  assert.equal(button(h,'Setting %').getAttribute('aria-pressed'),'true');
+  button(h,'CO₂').click();await h.updateComplete;await new Promise(r=>setTimeout(r,0));await h.updateComplete;
+  assert.equal(button(h,'CO₂').getAttribute('aria-pressed'),'true');assert.equal(button(h,'Setting %').getAttribute('aria-pressed'),'false');
+  const failed=h.shadowRoot.querySelector('[role=alert]');assert.equal(failed.dataset.tone,'error');assert.match(failed.textContent,/Could not load history/);
+  button(h,'Try again').click();await new Promise(r=>setTimeout(r,0));await h.updateComplete;assert.equal(attempts,2);
+  h.remove();delete window.loadCardHelpers;
+});
+test('curve errors use the shared notice and profiles are toggle pills',async()=>{
+  const{card,calls}=curveFixture();card.hass.states['sensor.test'].attributes.home_humidity=null;const c=await editor(card);
+  assert.equal(button(c,'Edit home curve').getAttribute('aria-pressed'),'true');assert.equal(button(c,'Edit away curve').getAttribute('aria-pressed'),'false');
+  assert.match(c.shadowRoot.querySelector('.curve-context b.family-unavailable').textContent,/Unavailable/);
+  const save=card.hass.callService;card.hass.callService=async()=>{throw Error('Offline')};button(c,'Add point').click();await settled(card,c);
+  const error=c.shadowRoot.querySelector('.family-notice[data-tone=error]');assert.equal(error.getAttribute('role'),'alert');
+  assert.deepEqual([...error.querySelectorAll('button')].map(b=>b.textContent.trim()),['Try again','Reload shared curve']);
+  card.hass.callService=save;button(c,'Try again').click();await settled(card,c);
+  assert.equal(calls.at(-1)[1],'set_response_curve');assert.equal(c.shadowRoot.querySelector('.family-notice'),null);card.remove();
+});

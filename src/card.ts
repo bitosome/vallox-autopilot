@@ -7,16 +7,24 @@ import {
   tileGlow,
   actionPill,
   notice,
+  asyncState,
   FamilyFlowController,
   renderFamilyDialog,
   showEntityMoreInfo,
+  formatHassNumber,
+  formatHassTime,
+  formatHassDate,
+  formatHassDateTime,
+  UNAVAILABLE_TEXT,
+  NOT_CONFIGURED_TEXT,
+  type FormatHass,
 } from "@bitosome/ha-card-ui";
 import { styles } from "./styles";
 import type { ResponseCurves } from "./curves";
 import "./curves";
 import "./history";
 type State = { state: string; attributes: Record<string, any> };
-type Hass = {
+type Hass = FormatHass & {
   states: Record<string, State>;
   entities?: Record<
     string,
@@ -30,10 +38,15 @@ type Hass = {
 };
 const icon = (name: string) =>
   html`<ha-icon icon=${name} aria-hidden="true"></ha-icon>`;
-const value = (n: any, unit = "") =>
+const value = (hass: Hass | undefined, n: any, unit = "") =>
   typeof n === "number" && Number.isFinite(n)
-    ? `${Math.round(n * 10) / 10}${unit}`
-    : "—";
+    ? `${formatHassNumber(hass, n, { maximumFractionDigits: 1 })}${unit}`
+    : UNAVAILABLE_TEXT;
+// Clock time for today's events; older events also name their date.
+const when = (hass: Hass | undefined, seconds: number) =>
+  formatHassDate(hass, seconds * 1000) === formatHassDate(hass, Date.now())
+    ? formatHassTime(hass, seconds * 1000)
+    : formatHassDateTime(hass, seconds * 1000, { year: false });
 const validNumber = (n: any, min = 0, max = Infinity): number | null =>
   typeof n === "number" && Number.isFinite(n) && n >= min && n <= max
     ? n
@@ -81,6 +94,7 @@ export class ValloxAutopilotCard extends LitElement {
     config: { state: true },
     error: { state: true },
     busy: { state: true },
+    pendingAction: { state: true },
   };
   hass?: Hass;
   config?: { entity: string; name?: string };
@@ -126,6 +140,8 @@ export class ValloxAutopilotCard extends LitElement {
   }
   error = "";
   busy = false;
+  /** Button key of the press in flight, for its pending presentation only. */
+  pendingAction = "";
   static styles = [designTokens, styles];
   setConfig(config: any) {
     if (!config.entity?.startsWith("sensor."))
@@ -352,6 +368,7 @@ export class ValloxAutopilotCard extends LitElement {
     if (!entity || this.busy) return;
     this.error = "";
     this.busy = true;
+    this.pendingAction = key;
     try {
       await this.hass!.callService(domain, service, {
         entity_id: entity,
@@ -361,6 +378,7 @@ export class ValloxAutopilotCard extends LitElement {
       this.error = e instanceof Error ? e.message : String(e);
     } finally {
       this.busy = false;
+      this.pendingAction = "";
     }
   }
   private show(page: DialogPage, opener?: HTMLElement) {
@@ -427,7 +445,7 @@ export class ValloxAutopilotCard extends LitElement {
       Number.isFinite(n);
     const severity =
       known && ["red", "amber", "green"].includes(rag) ? rag : "unknown";
-    const display = known ? value(n) : "Unavailable";
+    const display = known ? value(this.hass, n) : UNAVAILABLE_TEXT;
     const status =
       severity === "red"
         ? "Needs attention"
@@ -435,7 +453,7 @@ export class ValloxAutopilotCard extends LitElement {
           ? "Watch"
           : severity === "green"
             ? "In range"
-            : "Unavailable";
+            : UNAVAILABLE_TEXT;
     const label = `${title}: ${display}${known ? ` ${unit}; ${status}` : ""}`;
     const content = html`<span class="metric-top family-metric-top">
         ${icon(mdi)}<span class="metric-label family-metric-label"
@@ -468,15 +486,14 @@ export class ValloxAutopilotCard extends LitElement {
     entity?: string,
     compact = false,
   ) {
-    const display =
-      typeof n === "string"
-        ? n
-        : typeof n === "number" && Number.isFinite(n)
-          ? value(n, unit)
-          : "Unavailable";
+    const display = typeof n === "string" ? n : value(this.hass, n, unit);
+    const missing = display === UNAVAILABLE_TEXT;
     const content = html`<span class=${compact ? "family-telemetry-label" : ""}
         >${label}</span
-      ><b class=${compact ? "family-telemetry-value" : ""}>${display}</b>`;
+      ><b
+        class=${`${compact ? "family-telemetry-value" : ""} ${missing ? "family-unavailable" : ""}`}
+        >${display}</b
+      >`;
     const classes = compact ? "family-telemetry-cell" : "data-row";
     return entity
       ? html`<button
@@ -500,8 +517,8 @@ export class ValloxAutopilotCard extends LitElement {
         label: "Supply fan",
         text:
           supply === null
-            ? "Unavailable"
-            : `${Math.round(supply).toLocaleString()} rpm`,
+            ? UNAVAILABLE_TEXT
+            : `${formatHassNumber(this.hass, supply, { digits: 0 })} rpm`,
         mdi: "mdi:fan",
         active: false,
       },
@@ -510,15 +527,15 @@ export class ValloxAutopilotCard extends LitElement {
         label: "Extract fan",
         text:
           extract === null
-            ? "Unavailable"
-            : `${Math.round(extract).toLocaleString()} rpm`,
+            ? UNAVAILABLE_TEXT
+            : `${formatHassNumber(this.hass, extract, { digits: 0 })} rpm`,
         mdi: "mdi:fan",
         active: false,
       },
       {
         entity: b.post_heater_entity,
         label: "Post-heater",
-        text: heater === null ? "Unavailable" : heater ? "Active" : "Off",
+        text: heater === null ? UNAVAILABLE_TEXT : heater ? "Active" : "Off",
         mdi: "mdi:radiator",
         active: heater === true,
       },
@@ -538,7 +555,10 @@ export class ValloxAutopilotCard extends LitElement {
               >
                 <span class="telemetry-label family-telemetry-label"
                   >${icon(item.mdi)}${item.label}</span
-                ><strong class="family-telemetry-value">${item.text}</strong>
+                ><strong
+                  class=${`family-telemetry-value ${item.text === UNAVAILABLE_TEXT ? "family-unavailable" : ""}`}
+                  >${item.text}</strong
+                >
               </button>`,
           )}
         </div>`
@@ -548,6 +568,7 @@ export class ValloxAutopilotCard extends LitElement {
     const a = this.attrs;
     return html`<vallox-response-curves
         .flowEmbedded=${true}
+        .hass=${this.hass}
         @curve-open=${(event: CustomEvent<{ title: string }>) => {
           this.curveTitle = event.detail.title;
           this.flow.push("curve");
@@ -638,14 +659,15 @@ export class ValloxAutopilotCard extends LitElement {
                 }}
               /><small>${meta?.unit ?? ""}</small></span
             >
-            <button
-              class="family-action"
-              aria-label=${`Save ${label}`}
-              ?disabled=${this.busy || !dirty || !meta?.available || conflict}
-              @click=${() => this.saveNumber(key)}
-            >
-              ${icon("mdi:content-save-outline")}Save
-            </button>
+            ${actionPill({
+              label: "Save",
+              icon: "mdi:content-save-outline",
+              ariaLabel: `Save ${label}`,
+              disabled: this.busy || !dirty || !meta?.available || conflict,
+              pending: this.settingRequest?.key === key,
+              pendingLabel: "Saving…",
+              onClick: () => this.saveNumber(key),
+            })}
           </div>
           ${!meta?.available
             ? notice({
@@ -730,7 +752,7 @@ export class ValloxAutopilotCard extends LitElement {
             ? "Active"
             : a.sauna_active === false
               ? "Inactive"
-              : "Unavailable",
+              : UNAVAILABLE_TEXT,
           "",
           a.entities?.sauna_active,
         )}${this.row(
@@ -747,25 +769,25 @@ export class ValloxAutopilotCard extends LitElement {
           "Filter service",
           a.bindings?.filter_entity
             ? (this.hass?.states[a.bindings.filter_entity]?.state ??
-                "Unavailable")
-            : "Not configured",
+                UNAVAILABLE_TEXT)
+            : NOT_CONFIGURED_TEXT,
           "",
           a.bindings?.filter_entity,
         )}
       </section>
       <details class="surface family-surface group">
-        <summary>Recent decisions</summary>
-        ${[...(a.events ?? [])].reverse().map(
-          (e: any) =>
-            html`<div class="event">
-              <time
-                >${new Date(e.time * 1000).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}</time
-              ><span>${e.message}</span>
-            </div>`,
-        )}
+        <summary>Recent decisions${icon(UI_ICONS.expand)}</summary>
+        ${a.events?.length
+          ? [...a.events]
+              .reverse()
+              .map(
+                (e: any) =>
+                  html`<div class="event">
+                    <time>${when(this.hass, e.time)}</time
+                    ><span>${e.message}</span>
+                  </div>`,
+              )
+          : asyncState({ state: "empty", message: "No decisions yet" })}
       </details>
       <p class="hint">
         Vallox may increase actual speed using its own sensors. Defrost, fan
@@ -776,8 +798,11 @@ export class ValloxAutopilotCard extends LitElement {
     const s = this.state,
       a = this.attrs;
     if (!s || a.controller !== "vallox_autopilot")
-      return html`<ha-card class="notice"
-        >Select an available Vallox Autopilot status sensor.</ha-card
+      return html`<ha-card
+        >${notice({
+          message: "Select an available Vallox Autopilot status sensor.",
+          tone: "warning",
+        })}</ha-card
       >`;
     const automation = this.entity("automation", "switch"),
       enabled = automation && this.hass?.states[automation]?.state === "on";
@@ -831,7 +856,10 @@ export class ValloxAutopilotCard extends LitElement {
       : 12;
     const boost = !!a.boost_until,
       glow = buildGlow(
-        { weak: "rgba(50,150,220,.12)", strong: "rgba(50,150,220,.22)" },
+        {
+          weak: "color-mix(in srgb, var(--family-active) 12%, transparent)",
+          strong: "color-mix(in srgb, var(--family-active) 22%, transparent)",
+        },
         "static",
         !!enabled || boost,
       );
@@ -876,10 +904,13 @@ export class ValloxAutopilotCard extends LitElement {
               <div class="speed">
                 <div class="speed-values">
                   <span class="speed-reading"
-                    ><strong class=${setting === null ? "missing" : ""}
+                    ><strong
+                      class=${setting === null
+                        ? "missing family-unavailable"
+                        : ""}
                       >${setting === null
-                        ? "Unavailable"
-                        : value(setting)}</strong
+                        ? UNAVAILABLE_TEXT
+                        : value(this.hass, setting)}</strong
                     >${setting === null ? nothing : html`<span>%</span>`}</span
                   ><span class="speed-caption" aria-live="polite"
                     >Fan setting</span
@@ -907,6 +938,9 @@ export class ValloxAutopilotCard extends LitElement {
                   disabled:
                     this.busy ||
                     !this.entity(boost ? "cancel_boost" : "boost", "button"),
+                  pending:
+                    this.pendingAction === (boost ? "cancel_boost" : "boost"),
+                  pendingLabel: boost ? "Ending boost…" : "Starting boost…",
                   onClick: () =>
                     this.act(
                       boost ? "cancel_boost" : "boost",
@@ -914,57 +948,58 @@ export class ValloxAutopilotCard extends LitElement {
                       "press",
                     ),
                 })}${a.hold_until
-                  ? html`<button
-                      class="pill family-action"
-                      ?disabled=${this.busy}
-                      @click=${() => this.act("resume", "button", "press")}
-                    >
-                      ${icon("mdi:play")}Resume auto
-                    </button>`
+                  ? actionPill({
+                      label: "Resume auto",
+                      icon: "mdi:play",
+                      disabled: this.busy,
+                      pending: this.pendingAction === "resume",
+                      pendingLabel: "Resuming…",
+                      onClick: () => this.act("resume", "button", "press"),
+                    })
                   : nothing}${boost
                   ? html`<span class="hint"
-                      >Until
-                      ${new Date(a.boost_until * 1000).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}</span
+                      >Until ${when(this.hass, a.boost_until)}</span
                     >`
                   : nothing}
               </div>
             </section>
           </div>
           ${a.sauna_inhibited
-            ? html`<div class="notice">
-                ${icon("mdi:heat-wave")}${a.sauna_active === true
-                  ? "Controller humidity boost paused for sauna."
-                  : "Sauna status unavailable; controller humidity boost paused."}
-              </div>`
+            ? a.sauna_active === true
+              ? notice({
+                  message: "Controller humidity boost paused for sauna.",
+                  tone: "accent",
+                  icon: "mdi:heat-wave",
+                })
+              : notice({
+                  message:
+                    "Sauna status unavailable; controller humidity boost paused.",
+                  tone: "warning",
+                  icon: "mdi:heat-wave",
+                })
             : nothing}
           ${a.degraded
-            ? html`<details class="notice">
-                <summary>
-                  Sensor fallback · minimum ${a.settings?.home_speed ?? 30}%
-                </summary>
-                <p>
-                  Some inputs cannot be used. Auto keeps at least the Home
-                  airflow; higher valid demands still apply.
-                </p>
-                ${(a.input_issues ?? []).map(
-                  (issue: any) =>
-                    html`<button
-                      class="data-row"
-                      @click=${() => this.more(issue.entity_id)}
-                    >
-                      <span>${issue.name}</span><b>${issue.reason}</b>
-                    </button>`,
-                )}
-              </details>`
+            ? notice({
+                title: `Sensor fallback · minimum ${a.settings?.home_speed ?? 30}%`,
+                message:
+                  "Some inputs cannot be used. Auto keeps at least the Home airflow; higher valid demands still apply.",
+                tone: "warning",
+                body: (a.input_issues ?? []).length
+                  ? (a.input_issues ?? []).map(
+                      (issue: any) =>
+                        html`<button
+                          class="data-row"
+                          @click=${() => this.more(issue.entity_id)}
+                        >
+                          <span>${issue.name}</span><b>${issue.reason}</b>
+                        </button>`,
+                    )
+                  : undefined,
+              })
             : nothing}
           ${a.notice ? html`<p class="hint">${a.notice}</p>` : nothing}${this
             .error || a.error
-            ? html`<div role="alert" class="notice error">
-                ${this.error || a.error}
-              </div>`
+            ? notice({ message: this.error || a.error, tone: "error" })
             : nothing}
           ${this.overview()}
           <nav

@@ -22,8 +22,6 @@ export const styles = [
     :host {
       color: var(--primary-text-color, #26352f);
       font-family: var(--family-font);
-      --surface: var(--ha-card-background, var(--card-background-color, #fff));
-      --muted: var(--secondary-text-color, #69756f);
     }
     * {
       box-sizing: border-box;
@@ -31,9 +29,9 @@ export const styles = [
     ha-card {
       display: block;
       padding: var(--tile-padding-large);
-      background: var(--surface);
+      background: var(--family-surface);
       border: 1px solid var(--divider-color, #0001);
-      border-radius: var(--ha-card-border-radius, 24px);
+      border-radius: var(--family-radius);
       /* Bound the halo to this dashboard card; inner tile gaps remain open. */
       overflow: clip;
       container-type: inline-size;
@@ -122,12 +120,6 @@ export const styles = [
     .hero {
       padding: 14px 16px;
     }
-    .pill.active {
-      background: color-mix(in srgb, var(--primary-color) 22%, var(--surface));
-      color: var(--primary-text-color);
-      box-shadow: inset 0 0 0 1px
-        color-mix(in srgb, var(--primary-color) 40%, transparent);
-    }
     .speed {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
@@ -163,7 +155,7 @@ export const styles = [
     }
     .speed-reading > span {
       font-size: 19px;
-      color: var(--muted);
+      color: var(--family-muted);
     }
     .speed-caption {
       display: flex;
@@ -171,7 +163,7 @@ export const styles = [
       gap: 6px;
       margin-top: 3px;
       font-size: 12px;
-      color: var(--muted);
+      color: var(--family-muted);
       line-height: 1.6;
     }
     .track {
@@ -204,10 +196,10 @@ export const styles = [
       flex-basis: 13px;
     }
     .telemetry.active {
-      background: color-mix(in srgb, var(--status-warn-color) 12%, transparent);
+      background: color-mix(in srgb, var(--status-heat-color) 12%, transparent);
     }
     .telemetry.active .telemetry-label {
-      color: var(--status-warn-color);
+      color: var(--status-heat-color);
     }
     /* Decorative flow uses the native MDI fan and theme accent; never indicates
    automation ownership. It moves only with a valid operating reading and, when mapped, measured RPM. */
@@ -216,7 +208,7 @@ export const styles = [
       width: 56px;
       height: 56px;
       pointer-events: none;
-      color: var(--muted);
+      color: var(--family-muted);
       opacity: 0.35;
       flex-shrink: 0;
     }
@@ -255,16 +247,16 @@ export const styles = [
       border-radius: 50%;
       margin-left: auto;
       flex-shrink: 0;
-      background: var(--muted);
+      background: var(--family-muted);
     }
     .dot.green {
-      background: var(--status-success-color);
+      background: var(--family-success);
     }
     .dot.amber {
-      background: var(--status-warn-color);
+      background: var(--family-warning);
     }
     .dot.red {
-      background: var(--status-alert-color);
+      background: var(--family-error);
     }
 
     .data-row {
@@ -285,7 +277,7 @@ export const styles = [
       border-bottom: 0;
     }
     .data-row span {
-      color: var(--muted);
+      color: var(--family-muted);
     }
     .data-row b {
       text-align: right;
@@ -295,7 +287,7 @@ export const styles = [
     }
     .hint {
       font-size: 12px;
-      color: var(--muted);
+      color: var(--family-muted);
       line-height: 1.6;
       margin: 0;
       padding: 0 8px;
@@ -304,11 +296,29 @@ export const styles = [
       padding: 8px 16px;
     }
     summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
       cursor: pointer;
       min-height: 44px;
-      padding: 14px 0;
+      padding: 11px 0;
       font-size: 13px;
       font-weight: 600;
+      list-style: none;
+    }
+    summary::-webkit-details-marker {
+      display: none;
+    }
+    summary ha-icon {
+      width: 16px;
+      height: 16px;
+      --mdc-icon-size: 16px;
+      flex-basis: 16px;
+      color: var(--family-muted);
+    }
+    details[open] > summary ha-icon {
+      transform: rotate(180deg);
     }
     .settings-link {
       display: grid;
@@ -356,10 +366,10 @@ export const styles = [
       border: 1px solid var(--divider-color, #0002);
       border-radius: 10px;
       padding: 8px 12px;
-      background: var(--surface);
+      background: var(--family-surface);
     }
     .setting-input-unit small {
-      color: var(--muted);
+      color: var(--family-muted);
       flex: 0 0 auto;
     }
     .setting-field .family-action {
@@ -374,30 +384,8 @@ export const styles = [
       line-height: 1.5;
     }
     .event time {
-      color: var(--muted);
+      color: var(--family-muted);
       flex-shrink: 0;
-    }
-    .notice {
-      position: relative;
-      z-index: 1;
-      border-radius: var(--tile-border-radius);
-      padding: 12px 14px;
-      font-size: 12px;
-      line-height: 1.6;
-      background: color-mix(
-        in srgb,
-        var(--status-warn-color) 9%,
-        var(--surface)
-      );
-      border: 1px solid
-        color-mix(in srgb, var(--status-warn-color) 25%, transparent);
-    }
-    .notice ha-icon {
-      vertical-align: middle;
-      margin-right: 6px;
-    }
-    .notice.error {
-      border-color: var(--status-alert-color);
     }
     @container (max-width:340px) {
       .hero {
