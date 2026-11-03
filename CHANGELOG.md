@@ -2,7 +2,7 @@
 
 ## 0.8.0 — 2026-11-03
 
-- Bundle shared UI 1.4.0. Show sauna, sensor-fallback, error and setup messages as shared notices with severity icons; list unusable fallback inputs directly in the notice instead of a collapsed section.
+- Bundle shared UI 1.4.0. Show sauna, sensor-fallback, error and setup messages as shared notices with severity icons; list unusable fallback inputs directly below the notice instead of a collapsed section, outside its live region so changing stale-input minutes are not re-announced.
 - Show a spinner and progress label on Boost, End boost, Resume auto and setting Save while the request is pending, with the same busy state for assistive technology.
 - Keep History loading, no-sensor and failed states distinct, with one Try again action and no repeated History heading. Curve save errors use the same notice with Try again and Reload shared curve.
 - Mark selected history graphs, Home/Away curves and curve points with shared toggle pills.

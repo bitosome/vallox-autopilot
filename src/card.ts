@@ -979,23 +979,29 @@ export class ValloxAutopilotCard extends LitElement {
                 })
             : nothing}
           ${a.degraded
-            ? notice({
+            ? html`${notice({
                 title: `Sensor fallback · minimum ${a.settings?.home_speed ?? 30}%`,
                 message:
                   "Some inputs cannot be used. Auto keeps at least the Home airflow; higher valid demands still apply.",
                 tone: "warning",
-                body: (a.input_issues ?? []).length
-                  ? (a.input_issues ?? []).map(
-                      (issue: any) =>
-                        html`<button
-                          class="data-row"
-                          @click=${() => this.more(issue.entity_id)}
-                        >
-                          <span>${issue.name}</span><b>${issue.reason}</b>
-                        </button>`,
-                    )
-                  : undefined,
-              })
+              })}${(a.input_issues ?? []).length
+                ? html`<!-- Outside the status notice: stale-input minutes change every refresh. -->
+                    <div
+                      class="input-issues"
+                      role="group"
+                      aria-label="Unusable inputs"
+                    >
+                      ${(a.input_issues ?? []).map(
+                        (issue: any) =>
+                          html`<button
+                            class="data-row"
+                            @click=${() => this.more(issue.entity_id)}
+                          >
+                            <span>${issue.name}</span><b>${issue.reason}</b>
+                          </button>`,
+                      )}
+                    </div>`
+                : nothing}`
             : nothing}
           ${a.notice ? html`<p class="hint">${a.notice}</p>` : nothing}${this
             .error || a.error

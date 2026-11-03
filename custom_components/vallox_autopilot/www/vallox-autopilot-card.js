@@ -1115,6 +1115,9 @@ const _=globalThis,k=t=>t,A=_.trustedTypes,S=A?A.createPolicy("lit-html",{create
       background: var(--family-error);
     }
 
+    .input-issues {
+      padding: 0 12px;
+    }
     .data-row {
       display: flex;
       align-items: center;
@@ -2023,12 +2026,19 @@ const _=globalThis,k=t=>t,A=_.trustedTypes,S=A?A.createPolicy("lit-html",{create
             </section>
           </div>
           ${e.sauna_inhibited?!0===e.sauna_active?Lt({message:"Controller humidity boost paused for sauna.",tone:"accent",icon:"mdi:heat-wave"}):Lt({message:"Sauna status unavailable; controller humidity boost paused.",tone:"warning",icon:"mdi:heat-wave"}):V}
-          ${e.degraded?Lt({title:`Sensor fallback · minimum ${e.settings?.home_speed??30}%`,message:"Some inputs cannot be used. Auto keeps at least the Home airflow; higher valid demands still apply.",tone:"warning",body:(e.input_issues??[]).length?(e.input_issues??[]).map(t=>B`<button
-                          class="data-row"
-                          @click=${()=>this.more(t.entity_id)}
-                        >
-                          <span>${t.name}</span><b>${t.reason}</b>
-                        </button>`):void 0}):V}
+          ${e.degraded?B`${Lt({title:`Sensor fallback · minimum ${e.settings?.home_speed??30}%`,message:"Some inputs cannot be used. Auto keeps at least the Home airflow; higher valid demands still apply.",tone:"warning"})}${(e.input_issues??[]).length?B`<!-- Outside the status notice: stale-input minutes change every refresh. -->
+                    <div
+                      class="input-issues"
+                      role="group"
+                      aria-label="Unusable inputs"
+                    >
+                      ${(e.input_issues??[]).map(t=>B`<button
+                            class="data-row"
+                            @click=${()=>this.more(t.entity_id)}
+                          >
+                            <span>${t.name}</span><b>${t.reason}</b>
+                          </button>`)}
+                    </div>`:V}`:V}
           ${e.notice?B`<p class="hint">${e.notice}</p>`:V}${this.error||e.error?Lt({message:this.error||e.error,tone:"error"}):V}
           ${this.overview()}
           <nav

@@ -276,7 +276,7 @@ test('setting Save stays busy until Home Assistant reads the value back',async()
   card.hass.states['number.speed'].state='35';card.hass={...card.hass};await card.updateComplete;await card.updateComplete;
   assert.equal(button(card,'Save Home speed').getAttribute('aria-busy'),'false');card.remove();
 });
-test('card notices use shared severity notices with the fallback inputs visible',async()=>{
+test('card notices use shared severity notices with the fallback inputs visible outside the live region',async()=>{
   const{card}=fixture();Object.assign(card.hass.states['sensor.test'].attributes,{sauna_inhibited:true,sauna_active:true,degraded:true,settings:{boost_minutes:15,home_speed:30},input_issues:[{entity_id:'sensor.current',name:'Sauna phase 1',reason:'Unavailable'}]});
   await card.updateComplete;
   assert.equal(card.shadowRoot.querySelector('.notice'),null);
@@ -284,7 +284,7 @@ test('card notices use shared severity notices with the fallback inputs visible'
   assert.deepEqual(notices.map(n=>n.dataset.tone),['accent','warning']);
   assert.ok(notices.every(n=>n.querySelector('.family-notice-icon')));
   assert.match(notices[1].querySelector('.family-notice-title').textContent,/Sensor fallback · minimum 30%/);
-  let id;card.addEventListener('hass-more-info',e=>id=e.detail.entityId);notices[1].querySelector('.data-row').click();assert.equal(id,'sensor.current');
+  let id;card.addEventListener('hass-more-info',e=>id=e.detail.entityId);assert.equal(notices[1].querySelector('.data-row'),null);const issues=notices[1].nextElementSibling;assert.ok(issues.classList.contains('input-issues'));assert.equal(issues.closest('[role]')?.getAttribute('role'),'group');issues.querySelector('.data-row').click();assert.equal(id,'sensor.current');
   card.hass.states['sensor.test'].attributes.sauna_active=null;card.hass={...card.hass};await card.updateComplete;
   assert.equal(card.shadowRoot.querySelector('.family-notice').dataset.tone,'warning');
   card.hass.callService=async()=>{throw Error('Permission denied')};button(card,'Boost').click();await new Promise(r=>setTimeout(r,0));await card.updateComplete;

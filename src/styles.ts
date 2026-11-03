@@ -259,6 +259,9 @@ export const styles = [
       background: var(--family-error);
     }
 
+    .input-issues {
+      padding: 0 12px;
+    }
     .data-row {
       display: flex;
       align-items: center;
