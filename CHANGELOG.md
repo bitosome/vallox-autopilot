@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.1 — 2026-11-03
+
+- Bundle shared UI 1.5.0. The fan setting bar is the shared family level meter: the same 6px track as the vehicle battery bars, announced as a meter to assistive technology. Unselected history and curve toggle pills keep their label centred.
+- Preserve ventilation algorithms, entity contracts, settings and curves.
+
 ## 0.8.0 — 2026-11-03
 
 - Bundle shared UI 1.4.0. Show sauna, sensor-fallback, error and setup messages as shared notices with severity icons; list unusable fallback inputs directly below the notice instead of a collapsed section, outside its live region so changing stale-input minutes are not re-announced.

@@ -6,6 +6,7 @@ import {
   buildGlow,
   tileGlow,
   actionPill,
+  levelMeter,
   notice,
   asyncState,
   FamilyFlowController,
@@ -924,9 +925,11 @@ export class ValloxAutopilotCard extends LitElement {
                   <span class="airflow-fan">${icon("mdi:fan")}</span>
                 </div>
               </div>
-              <div class="track">
-                <div style=${`width:${setting ?? 0}%`}></div>
-              </div>
+              ${levelMeter({
+                value: setting,
+                label: "Fan setting",
+                className: "speed-meter",
+              })}
               ${this.fanTelemetry(supply, extract, heater)}
               <div class="actions">
                 ${actionPill({

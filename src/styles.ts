@@ -166,22 +166,6 @@ export const styles = [
       color: var(--family-muted);
       line-height: 1.6;
     }
-    .track {
-      height: 5px;
-      border-radius: 999px;
-      overflow: hidden;
-      background: color-mix(
-        in srgb,
-        var(--primary-text-color) 12%,
-        transparent
-      );
-    }
-    .track > div {
-      height: 100%;
-      background: var(--primary-color);
-      border-radius: inherit;
-      transition: width 0.3s;
-    }
     .actions {
       display: flex;
       flex-wrap: wrap;
